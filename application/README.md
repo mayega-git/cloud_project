@@ -18,6 +18,19 @@ curl http://127.0.0.1:3000/health
 
 Exécuter les migrations avant le backend ; elles sont idempotentes. `setup-local.sh` préserve les secrets existants et crée ceux qui manquent dans `.env` et `.secrets/`, exclus de Git. La passerelle de l'éditeur écoute sur `127.0.0.1:9001` et refuse les API administratives aux navigateurs. Les anciens pads locaux restent stockés mais sont isolés du nouveau parcours métier.
 
+## Déployer les images publiées
+
+Le workflow manuel « Publish images » (`.github/workflows/cd.yml`, à lancer sur `main`) construit et publie `backend` et `etherpad` sur GHCR, taggés par SHA de commit. `deployment/compose.deploy.yaml` fait tourner ces images, épinglées par tag et digest, au lieu de les construire. Même préparation que ci-dessus (`setup-local.sh`, puis migrations avant le démarrage complet) :
+
+```sh
+docker compose --env-file .env -f deployment/compose.yaml -f deployment/compose.deploy.yaml pull
+docker compose --env-file .env -f deployment/compose.yaml -f deployment/compose.deploy.yaml up -d postgres
+docker compose --env-file .env -f deployment/compose.yaml -f deployment/compose.deploy.yaml run --rm --no-deps backend node dist/database.js
+docker compose --env-file .env -f deployment/compose.yaml -f deployment/compose.deploy.yaml up -d
+```
+
+Les paquets GHCR sont privés par défaut : soit les rendre publics, soit exécuter d'abord `docker login ghcr.io` avec un jeton disposant du droit `read:packages`. Pour déployer une autre version, remplacer les deux références du fichier par celles du résumé de l'exécution. Ce déploiement garde `APP_ENV=local` : il convient à une démonstration non publique, pas à une exposition sur Internet (voir la section sur l'identité locale et les messages en mémoire).
+
 ## Essayer
 
 L'identité de développement est **réservée au mode local** : nom et e-mail déclarés, sans vérification de possession. Elle crée un cookie opaque dont seul le hachage est stocké. Cet adaptateur ne convient pas à un déploiement public.

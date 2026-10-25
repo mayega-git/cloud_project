@@ -1,0 +1,16 @@
+# Deployment override: run the images published by .github/workflows/cd.yml
+# instead of building from source. Each image is pinned by commit tag and
+# digest, so a rebuild or a moved tag cannot change what runs.
+#
+#   docker compose --env-file .env \
+#     -f deployment/compose.yaml -f deployment/compose.deploy.yaml up -d
+#
+# To deploy a newer build, replace both references with the values printed in
+# the summary of the "Publish images" run.
+services:
+  etherpad:
+    image: ghcr.io/mayega-git/cloud_project/etherpad:69a0711a4a5bc258da53bf1aff63991e9121b37a@sha256:3a0c3f927445f35435c30983c64cda41f96878d972093f4178ed3af8fb3ef9c2
+    build: !reset null
+  backend:
+    image: ghcr.io/mayega-git/cloud_project/backend:69a0711a4a5bc258da53bf1aff63991e9121b37a@sha256:8176e43ef88191b6869f69ce8cbb43de96b9c7a1c5dcfa6558d20fb66d620847
+    build: !reset null
