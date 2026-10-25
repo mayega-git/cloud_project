@@ -1,0 +1,676 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Collaborative editor: two application instances in two Availability Zones
+  behind an Application Load Balancer, PostgreSQL on RDS, private S3 bucket.
+  Uses an existing VPC (the default VPC of the region). One Etherpad only
+  (instance A); instance B relays editor traffic to it.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: The default VPC of the region.
+  SubnetAId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet of the default VPC for instance A (first Availability Zone).
+  SubnetBId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet of the default VPC in a DIFFERENT Availability Zone, for instance B.
+  AllowedCidr:
+    Type: String
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+    Description: >-
+      Source range allowed to reach the load balancer (for example your own
+      address as x.x.x.x/32, or 0.0.0.0/0). The application runs in local
+      identity mode, so keep this as narrow as the evaluation allows.
+  BackendImage:
+    Type: String
+    Description: Full image reference published by the "Publish images" workflow (tag@digest).
+  EtherpadImage:
+    Type: String
+    Description: Full image reference published by the "Publish images" workflow (tag@digest).
+  KeyPairName:
+    Type: String
+    Default: ""
+    Description: Optional EC2 key pair name for SSH. Leave empty to rely on Session Manager only.
+  SshCidr:
+    Type: String
+    Default: ""
+    AllowedPattern: '^$|^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+    Description: Optional. Your own address as x.x.x.x/32 to open SSH (port 22) to the instances. Empty means no SSH rule.
+  InstanceTypeA:
+    Type: String
+    Default: t3.small
+    Description: Runs Etherpad, the backend and the gateway. Check eligibility for your plan before creating.
+  InstanceTypeB:
+    Type: String
+    Default: t3.micro
+    Description: Runs the backend and the gateway. Check eligibility for your plan before creating.
+  DbInstanceClass:
+    Type: String
+    Default: db.t3.micro
+  DbEngineVersion:
+    Type: String
+    Default: "15"
+    Description: PostgreSQL major version (Etherpad and the backend were tested on 15).
+  UbuntuAmi:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
+  HasSshCidr: !Not [!Equals [!Ref SshCidr, ""]]
+
+Resources:
+  # -------------------------------------------------------- security groups
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Load balancer entry points (application 80, editor 9001)
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: !Ref AllowedCidr}
+        - {IpProtocol: tcp, FromPort: 9001, ToPort: 9001, CidrIp: !Ref AllowedCidr}
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Application instances; entry only from the load balancer and each other
+      VpcId: !Ref VpcId
+  DbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: PostgreSQL, reachable from the application instances only
+      VpcId: !Ref VpcId
+
+  AppFromAlbBackend:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AppSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3000
+      ToPort: 3000
+      SourceSecurityGroupId: !Ref AlbSecurityGroup
+  AppFromAlbGateway:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AppSecurityGroup
+      IpProtocol: tcp
+      FromPort: 9001
+      ToPort: 9001
+      SourceSecurityGroupId: !Ref AlbSecurityGroup
+  # Instance B waits for backend A (3000), and its gateway and backend call the
+  # raw Etherpad (9002). The raw Etherpad API is never exposed to the load balancer.
+  AppFromAppBackend:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AppSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3000
+      ToPort: 3000
+      SourceSecurityGroupId: !Ref AppSecurityGroup
+  AppFromAppEtherpad:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AppSecurityGroup
+      IpProtocol: tcp
+      FromPort: 9002
+      ToPort: 9002
+      SourceSecurityGroupId: !Ref AppSecurityGroup
+  # Optional fallback administration: only from the operator address.
+  AppSsh:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: HasSshCidr
+    Properties:
+      GroupId: !Ref AppSecurityGroup
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      CidrIp: !Ref SshCidr
+  DbFromApp:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DbSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref AppSecurityGroup
+
+  # ---------------------------------------------------------------- secrets
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: PostgreSQL master password
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"etherpad"}'
+        GenerateStringKey: password
+        PasswordLength: 40
+        ExcludePunctuation: true
+  EtherpadApiKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Etherpad API key used by the backend
+      GenerateSecretString:
+        SecretStringTemplate: '{"purpose":"etherpad-api-key"}'
+        GenerateStringKey: value
+        PasswordLength: 48
+        ExcludePunctuation: true
+  InternalKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Shared key between the backend and the Etherpad plugin
+      GenerateSecretString:
+        SecretStringTemplate: '{"purpose":"internal-key"}'
+        GenerateStringKey: value
+        PasswordLength: 48
+        ExcludePunctuation: true
+  AuthSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Better Auth signing secret
+      GenerateSecretString:
+        SecretStringTemplate: '{"purpose":"auth-secret"}'
+        GenerateStringKey: value
+        PasswordLength: 48
+        ExcludePunctuation: true
+  EtherpadAdminSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Etherpad administration password (the gateway never exposes it)
+      GenerateSecretString:
+        SecretStringTemplate: '{"purpose":"etherpad-admin"}'
+        GenerateStringKey: value
+        PasswordLength: 40
+        ExcludePunctuation: true
+
+  # ---------------------------------------------------------------------- S3
+  ExportsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules: [{ObjectOwnership: BucketOwnerEnforced}]
+  ExportsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ExportsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt ExportsBucket.Arn
+              - !Sub "${ExportsBucket.Arn}/*"
+            Condition:
+              Bool: {"aws:SecureTransport": "false"}
+
+  # --------------------------------------------------------------------- IAM
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: {Service: ec2.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: application-minimum
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ReadOwnSecretsOnly
+                Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DatabaseSecret
+                  - !Ref EtherpadApiKeySecret
+                  - !Ref InternalKeySecret
+                  - !Ref AuthSecret
+                  - !Ref EtherpadAdminSecret
+              - Sid: ExportObjects
+                Effect: Allow
+                Action: [s3:GetObject, s3:PutObject]
+                Resource: !Sub "${ExportsBucket.Arn}/exports/*"
+              - Sid: ListExportPrefix
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt ExportsBucket.Arn
+                Condition:
+                  StringLike: {"s3:prefix": "exports/*"}
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref InstanceRole]
+
+  # --------------------------------------------------------------------- RDS
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnets of the editor database (two Availability Zones)
+      SubnetIds: [!Ref SubnetAId, !Ref SubnetBId]
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    Properties:
+      Engine: postgres
+      EngineVersion: !Ref DbEngineVersion
+      DBInstanceClass: !Ref DbInstanceClass
+      AllocatedStorage: "20"
+      StorageType: gp3
+      StorageEncrypted: true
+      DBName: etherpad
+      MasterUsername: etherpad
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      VPCSecurityGroups: [!Ref DbSecurityGroup]
+      PubliclyAccessible: false
+      MultiAZ: false
+      BackupRetentionPeriod: 1
+      DeleteAutomatedBackups: true
+      DeletionProtection: false
+
+  # ------------------------------------------------------ load balancer (ALB)
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      Scheme: internet-facing
+      Subnets: [!Ref SubnetAId, !Ref SubnetBId]
+      SecurityGroups: [!Ref AlbSecurityGroup]
+      LoadBalancerAttributes:
+        # Editor WebSockets are long-lived.
+        - {Key: idle_timeout.timeout_seconds, Value: "3600"}
+  ApplicationTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VpcId
+      Protocol: HTTP
+      Port: 3000
+      TargetType: instance
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 15
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      TargetGroupAttributes:
+        - {Key: deregistration_delay.timeout_seconds, Value: "30"}
+      Targets: [{Id: !Ref InstanceA}, {Id: !Ref InstanceB}]
+  EditorTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VpcId
+      Protocol: HTTP
+      Port: 9001
+      TargetType: instance
+      # Etherpad answers /health without authentication through the gateway.
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 15
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      TargetGroupAttributes:
+        - {Key: deregistration_delay.timeout_seconds, Value: "30"}
+      Targets: [{Id: !Ref InstanceA}, {Id: !Ref InstanceB}]
+  ApplicationListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Protocol: HTTP
+      Port: 80
+      DefaultActions: [{Type: forward, TargetGroupArn: !Ref ApplicationTargetGroup}]
+  EditorListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Protocol: HTTP
+      Port: 9001
+      DefaultActions: [{Type: forward, TargetGroupArn: !Ref EditorTargetGroup}]
+
+  # --------------------------------------------------------------- instances
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: !Ref UbuntuAmi
+        IamInstanceProfile: {Arn: !GetAtt InstanceProfile.Arn}
+        SecurityGroupIds: [!Ref AppSecurityGroup]
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref "AWS::NoValue"]
+        MetadataOptions:
+          # IMDSv2 only; hop limit 1 keeps the role credentials out of containers.
+          HttpTokens: required
+          HttpPutResponseHopLimit: 1
+          HttpEndpoint: enabled
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs: {VolumeSize: 20, VolumeType: gp3, Encrypted: true, DeleteOnTermination: true}
+
+  # The two start-up scripts differ only in their first lines: A reads its own
+  # address, B receives the private address of A. Keep the rest identical.
+  InstanceA:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceTypeA
+      SubnetId: !Ref SubnetAId
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      Tags: [{Key: Name, Value: editor-app-a}]
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Bootstrap run once at first boot. No secret is written here: the
+          # instance role reads them from Secrets Manager.
+          set -euo pipefail
+          exec > >(tee -a /var/log/app-bootstrap.log) 2>&1
+          export DEBIAN_FRONTEND=noninteractive
+          NODE_ROLE=A
+          TOKEN=$(curl -s -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 300')
+          export ETHERPAD_HOST=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4)
+          echo "node role: $NODE_ROLE, etherpad host: $ETHERPAD_HOST"
+
+          apt-get update
+          apt-get install -y docker.io docker-compose-v2 python3-boto3 curl
+          install -d -m 755 /etc/docker
+          cat > /etc/docker/daemon.json <<'JSON'
+          {"log-driver": "json-file", "log-opts": {"max-size": "10m", "max-file": "3"}}
+          JSON
+          systemctl enable docker
+          systemctl restart docker
+
+          install -d -m 700 /opt/app /opt/app/secrets
+          python3 - <<'PY'
+          import boto3, json, os
+          sm = boto3.client('secretsmanager', region_name='${AWS::Region}')
+          def get(arn, key):
+              return json.loads(sm.get_secret_value(SecretId=arn)['SecretString'])[key]
+          def write(path, value):
+              fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+              with os.fdopen(fd, 'w') as handle:
+                  handle.write(value + '\n')
+          write('/opt/app/secrets/APIKEY.txt', get('${EtherpadApiKeySecret}', 'value'))
+          write('/opt/app/secrets/INTERNAL_KEY.txt', get('${InternalKeySecret}', 'value'))
+          write('/opt/app/secrets/BETTER_AUTH_SECRET.txt', get('${AuthSecret}', 'value'))
+          env = [
+              'BACKEND_IMAGE=${BackendImage}',
+              'ETHERPAD_IMAGE=${EtherpadImage}',
+              'DB_HOST=${Database.Endpoint.Address}',
+              'DB_PASSWORD=' + get('${DatabaseSecret}', 'password'),
+              'ETHERPAD_ADMIN_PASSWORD=' + get('${EtherpadAdminSecret}', 'value'),
+              'ETHERPAD_HOST=' + os.environ['ETHERPAD_HOST'],
+              'ALB_DNS=${LoadBalancer.DNSName}',
+          ]
+          write('/opt/app/.env', '\n'.join(env))
+          PY
+
+          cat > /opt/app/nginx.template <<'NGINX'
+          server {
+            listen 9001;
+            location /api/ { return 403; }
+            location /admin { return 403; }
+            location /business-internal/ { return 403; }
+            location / {
+              proxy_pass http://$ETHERPAD_UPSTREAM;
+              proxy_http_version 1.1;
+              proxy_set_header Host $host;
+              proxy_set_header Upgrade $http_upgrade;
+              proxy_set_header Connection "upgrade";
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_read_timeout 3600s;
+            }
+          }
+          NGINX
+
+          cat > /opt/app/compose.yaml <<'COMPOSE'
+          services:
+            etherpad:
+              profiles: [a]
+              image: $ETHERPAD_IMAGE
+              user: "0:0"
+              restart: unless-stopped
+              mem_limit: 768m
+              ports: ["9002:9001"]
+              environment:
+                NODE_ENV: production
+                DB_TYPE: postgres
+                DB_HOST: $DB_HOST
+                DB_PORT: "5432"
+                DB_NAME: etherpad
+                DB_USER: etherpad
+                DB_PASS: $DB_PASSWORD
+                AUTHENTICATION_METHOD: apikey
+                REQUIRE_AUTHENTICATION: "true"
+                REQUIRE_AUTHORIZATION: "true"
+                BUSINESS_BACKEND_URL: http://backend:3000
+                INTERNAL_KEY_FILE: /run/business/INTERNAL_KEY.txt
+                ADMIN_PASSWORD: $ETHERPAD_ADMIN_PASSWORD
+                EDIT_ONLY: "true"
+                SHOW_RECENT_PADS: "false"
+                DEFAULT_PAD_TEXT: " "
+                PRIVACY_UPDATE_CHECK: "false"
+                PRIVACY_PLUGIN_CATALOG: "false"
+                UPDATES_TIER: "off"
+                TRUST_PROXY: "false"
+              volumes:
+                - /opt/app/secrets/APIKEY.txt:/opt/etherpad-lite/APIKEY.txt:ro
+                - /opt/app/secrets/INTERNAL_KEY.txt:/run/business/INTERNAL_KEY.txt:ro
+                - etherpad_var:/opt/etherpad-lite/var
+            backend:
+              image: $BACKEND_IMAGE
+              restart: unless-stopped
+              mem_limit: 384m
+              ports: ["3000:3000"]
+              environment:
+                HOST: 0.0.0.0
+                PORT: "3000"
+                APP_ENV: local
+                DATABASE_URL: postgresql://etherpad:$DB_PASSWORD@$DB_HOST:5432/etherpad
+                ETHERPAD_API_URL: http://$ETHERPAD_HOST:9002
+                ETHERPAD_PUBLIC_URL: http://$ALB_DNS:9001
+                ETHERPAD_API_KEY_FILE: /run/business/APIKEY.txt
+                INTERNAL_KEY_FILE: /run/business/INTERNAL_KEY.txt
+                BETTER_AUTH_SECRET_FILE: /run/business/BETTER_AUTH_SECRET.txt
+                AUTH_BASE_URL: http://$ALB_DNS
+                INVITATION_LIFETIME_DAYS: "7"
+              volumes:
+                - /opt/app/secrets/APIKEY.txt:/run/business/APIKEY.txt:ro
+                - /opt/app/secrets/INTERNAL_KEY.txt:/run/business/INTERNAL_KEY.txt:ro
+                - /opt/app/secrets/BETTER_AUTH_SECRET.txt:/run/business/BETTER_AUTH_SECRET.txt:ro
+            gateway:
+              image: nginx:1.27-alpine
+              restart: unless-stopped
+              mem_limit: 64m
+              ports: ["9001:9001"]
+              environment:
+                ETHERPAD_UPSTREAM: $ETHERPAD_HOST:9002
+              volumes:
+                - /opt/app/nginx.template:/etc/nginx/templates/default.conf.template:ro
+          volumes:
+            etherpad_var:
+          COMPOSE
+
+          cd /opt/app
+          DC="docker compose --env-file /opt/app/.env -f /opt/app/compose.yaml"
+          # A owns Etherpad and runs the migrations exactly once, before any backend serves traffic.
+          $DC --profile a pull
+          $DC --profile a up -d etherpad
+          $DC run --rm --no-deps backend node dist/database.js
+          $DC --profile a up -d backend gateway
+          echo "bootstrap finished"
+
+  InstanceB:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceTypeB
+      SubnetId: !Ref SubnetBId
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      Tags: [{Key: Name, Value: editor-app-b}]
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          # Bootstrap run once at first boot. No secret is written here: the
+          # instance role reads them from Secrets Manager.
+          set -euo pipefail
+          exec > >(tee -a /var/log/app-bootstrap.log) 2>&1
+          export DEBIAN_FRONTEND=noninteractive
+          NODE_ROLE=B
+          export ETHERPAD_HOST=${InstanceA.PrivateIp}
+          echo "node role: $NODE_ROLE, etherpad host: $ETHERPAD_HOST"
+
+          apt-get update
+          apt-get install -y docker.io docker-compose-v2 python3-boto3 curl
+          install -d -m 755 /etc/docker
+          cat > /etc/docker/daemon.json <<'JSON'
+          {"log-driver": "json-file", "log-opts": {"max-size": "10m", "max-file": "3"}}
+          JSON
+          systemctl enable docker
+          systemctl restart docker
+
+          install -d -m 700 /opt/app /opt/app/secrets
+          python3 - <<'PY'
+          import boto3, json, os
+          sm = boto3.client('secretsmanager', region_name='${AWS::Region}')
+          def get(arn, key):
+              return json.loads(sm.get_secret_value(SecretId=arn)['SecretString'])[key]
+          def write(path, value):
+              fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+              with os.fdopen(fd, 'w') as handle:
+                  handle.write(value + '\n')
+          write('/opt/app/secrets/APIKEY.txt', get('${EtherpadApiKeySecret}', 'value'))
+          write('/opt/app/secrets/INTERNAL_KEY.txt', get('${InternalKeySecret}', 'value'))
+          write('/opt/app/secrets/BETTER_AUTH_SECRET.txt', get('${AuthSecret}', 'value'))
+          env = [
+              'BACKEND_IMAGE=${BackendImage}',
+              'ETHERPAD_IMAGE=${EtherpadImage}',
+              'DB_HOST=${Database.Endpoint.Address}',
+              'DB_PASSWORD=' + get('${DatabaseSecret}', 'password'),
+              'ETHERPAD_ADMIN_PASSWORD=' + get('${EtherpadAdminSecret}', 'value'),
+              'ETHERPAD_HOST=' + os.environ['ETHERPAD_HOST'],
+              'ALB_DNS=${LoadBalancer.DNSName}',
+          ]
+          write('/opt/app/.env', '\n'.join(env))
+          PY
+
+          cat > /opt/app/nginx.template <<'NGINX'
+          server {
+            listen 9001;
+            location /api/ { return 403; }
+            location /admin { return 403; }
+            location /business-internal/ { return 403; }
+            location / {
+              proxy_pass http://$ETHERPAD_UPSTREAM;
+              proxy_http_version 1.1;
+              proxy_set_header Host $host;
+              proxy_set_header Upgrade $http_upgrade;
+              proxy_set_header Connection "upgrade";
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_read_timeout 3600s;
+            }
+          }
+          NGINX
+
+          cat > /opt/app/compose.yaml <<'COMPOSE'
+          services:
+            etherpad:
+              profiles: [a]
+              image: $ETHERPAD_IMAGE
+              user: "0:0"
+              restart: unless-stopped
+              mem_limit: 768m
+              ports: ["9002:9001"]
+              environment:
+                NODE_ENV: production
+                DB_TYPE: postgres
+                DB_HOST: $DB_HOST
+                DB_PORT: "5432"
+                DB_NAME: etherpad
+                DB_USER: etherpad
+                DB_PASS: $DB_PASSWORD
+                AUTHENTICATION_METHOD: apikey
+                REQUIRE_AUTHENTICATION: "true"
+                REQUIRE_AUTHORIZATION: "true"
+                BUSINESS_BACKEND_URL: http://backend:3000
+                INTERNAL_KEY_FILE: /run/business/INTERNAL_KEY.txt
+                ADMIN_PASSWORD: $ETHERPAD_ADMIN_PASSWORD
+                EDIT_ONLY: "true"
+                SHOW_RECENT_PADS: "false"
+                DEFAULT_PAD_TEXT: " "
+                PRIVACY_UPDATE_CHECK: "false"
+                PRIVACY_PLUGIN_CATALOG: "false"
+                UPDATES_TIER: "off"
+                TRUST_PROXY: "false"
+              volumes:
+                - /opt/app/secrets/APIKEY.txt:/opt/etherpad-lite/APIKEY.txt:ro
+                - /opt/app/secrets/INTERNAL_KEY.txt:/run/business/INTERNAL_KEY.txt:ro
+                - etherpad_var:/opt/etherpad-lite/var
+            backend:
+              image: $BACKEND_IMAGE
+              restart: unless-stopped
+              mem_limit: 384m
+              ports: ["3000:3000"]
+              environment:
+                HOST: 0.0.0.0
+                PORT: "3000"
+                APP_ENV: local
+                DATABASE_URL: postgresql://etherpad:$DB_PASSWORD@$DB_HOST:5432/etherpad
+                ETHERPAD_API_URL: http://$ETHERPAD_HOST:9002
+                ETHERPAD_PUBLIC_URL: http://$ALB_DNS:9001
+                ETHERPAD_API_KEY_FILE: /run/business/APIKEY.txt
+                INTERNAL_KEY_FILE: /run/business/INTERNAL_KEY.txt
+                BETTER_AUTH_SECRET_FILE: /run/business/BETTER_AUTH_SECRET.txt
+                AUTH_BASE_URL: http://$ALB_DNS
+                INVITATION_LIFETIME_DAYS: "7"
+              volumes:
+                - /opt/app/secrets/APIKEY.txt:/run/business/APIKEY.txt:ro
+                - /opt/app/secrets/INTERNAL_KEY.txt:/run/business/INTERNAL_KEY.txt:ro
+                - /opt/app/secrets/BETTER_AUTH_SECRET.txt:/run/business/BETTER_AUTH_SECRET.txt:ro
+            gateway:
+              image: nginx:1.27-alpine
+              restart: unless-stopped
+              mem_limit: 64m
+              ports: ["9001:9001"]
+              environment:
+                ETHERPAD_UPSTREAM: $ETHERPAD_HOST:9002
+              volumes:
+                - /opt/app/nginx.template:/etc/nginx/templates/default.conf.template:ro
+          volumes:
+            etherpad_var:
+          COMPOSE
+
+          cd /opt/app
+          DC="docker compose --env-file /opt/app/.env -f /opt/app/compose.yaml"
+          # B starts once backend A answers, which implies migrations are applied.
+          for i in $(seq 1 120); do
+            if curl -fs "http://$ETHERPAD_HOST:3000/health" >/dev/null; then break; fi
+            sleep 10
+          done
+          $DC pull
+          $DC up -d backend gateway
+          echo "bootstrap finished"
+
+Outputs:
+  PublicUrl:
+    Description: Application entry point (HTTP only)
+    Value: !Sub "http://${LoadBalancer.DNSName}"
+  EditorUrl:
+    Description: Editor entry point (HTTP only)
+    Value: !Sub "http://${LoadBalancer.DNSName}:9001"
+  ExportsBucketName:
+    Value: !Ref ExportsBucket
+  DatabaseEndpoint:
+    Value: !GetAtt Database.Endpoint.Address
+  InstanceAId:
+    Value: !Ref InstanceA
+  InstanceBId:
+    Value: !Ref InstanceB
