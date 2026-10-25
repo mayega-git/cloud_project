@@ -1,0 +1,34 @@
+@startuml
+!pragma layout smetana
+!include style.puml
+left to right direction
+
+actor "Rédacteur" as R
+actor "Visiteur anonyme" as V
+actor "Responsable\nde l'association" as A
+rectangle "Relais d'e-mail\n(système externe)" as M
+
+rectangle "Application d'édition collaborative" {
+  usecase "Se présenter\nEF-01" as U1
+  usecase "Créer, ouvrir et partager\nun document\nEF-02 à EF-04" as U2
+  usecase "Éditer à plusieurs,\nvoir les présences et positions\nEF-05 à EF-08" as U3
+  usecase "Consulter et restaurer\nune version\nEF-09 à EF-11" as U4
+  usecase "Créer un lien limité\nEF-12, EF-13" as U5
+  usecase "Télécharger le PDF actuel\net connaître l'état de la demande\nEF-14 à EF-21" as U6
+  usecase "Notifier le créateur à\nl'épuisement du lien\nEF-22" as U7
+  usecase "Appliquer le crédit quotidien\net le blocage temporaire\nEF-23 à EF-29" as U8
+  usecase "Consulter l'état\nde l'application\nEF-30 à EF-33" as U9
+}
+
+R -- U1
+R -- U2
+R -- U3
+R -- U4
+R -- U5
+R -- U7
+R -- U8
+V -- U6
+A -- U9
+U3 -[hidden]down- U7
+U7 -- M
+@enduml

@@ -1,0 +1,82 @@
+\documentclass[11pt,a4paper,oneside]{report}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{lmodern}
+  \usepackage[french]{babel}
+\else
+  \usepackage{fontspec}
+  \setmainfont{Latin Modern Roman}[SmallCapsFont={Latin Modern Roman Caps}]
+  \setsansfont{Latin Modern Sans}
+  \setmonofont{Latin Modern Mono}[Scale=0.88]
+  \usepackage{polyglossia}
+  \setdefaultlanguage{french}
+\fi
+\usepackage[a4paper,margin=24mm,headheight=15pt]{geometry}
+\usepackage{microtype,graphicx,array,booktabs,longtable,tabularx,enumitem,xurl,ragged2e}
+\usepackage{amsmath,amssymb,needspace,float}
+\usepackage{fancyhdr}
+\usepackage[hidelinks,unicode]{hyperref}
+\hypersetup{pdftitle={Cahier de conception - Éditeur collaboratif},pdfauthor={MAYEGA BALOCK},pdfsubject={État de l'art et spécification des exigences}}
+\graphicspath{{figures/}}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\setlength{\emergencystretch}{2em}
+\renewcommand{\arraystretch}{1.22}
+\setlist[itemize]{nosep,leftmargin=5mm}
+\setlist[enumerate]{nosep,leftmargin=7mm}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Éditeur collaboratif de documents}
+\fancyhead[R]{\small Cahier de conception · v0.3}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+\newcommand{\sourceSujet}[1]{\cite[sujet, #1]{sujet}}
+\newcommand{\req}[6]{\needspace{5\baselineskip}\par\textbf{#1 --- #2}\par #3\par {\small\textit{Origine :} #4. \textit{Priorité :} #5.\par\textit{Vérification :} #6.}\par\smallskip}
+\newcommand{\reqEF}[4]{\needspace{5\baselineskip}\par\textbf{#1 --- #2}\par #3\par {\small\textit{Vérification :} #4.}\par\smallskip}
+\newcommand{\reqENF}[4]{\needspace{5\baselineskip}\par\textbf{#1 --- #2}\par #3\par {\small\textit{Vérification :} #4.}\par\smallskip}
+\newcommand{\umlfigure}[4]{\begin{figure}[H]\centering\includegraphics[width=#2\linewidth,height=0.68\textheight,keepaspectratio]{#1}\caption{#3}\label{#4}\end{figure}}
+\begin{document}
+\raggedright
+\hypersetup{pageanchor=false}
+\begin{titlepage}
+\vspace*{22mm}
+{\large Développement web et cloud\par}
+\vspace{12mm}\hrule\vspace{8mm}
+{\Huge\bfseries Cahier de conception\par}
+\vspace{6mm}
+{\LARGE Un éditeur de documents partagé\par}
+\vspace{8mm}\hrule
+\vspace{16mm}
+{\Large Spécification et première conception\par}
+\vspace{4mm}
+{\large État de l'art, exigences, crédit, versions métier et MVP local\par}
+\vfill
+\begin{tabular}{@{}ll@{}}
+Auteur & MAYEGA BALOCK\\
+Version & 0.3 --- Historique et clôture de l'édition\\
+Date & 25 octobre 2026\\
+Modélisation & UML, sources PlantUML\\
+Présentation & Noir et blanc
+\end{tabular}
+\vspace{10mm}
+\end{titlepage}
+\pagenumbering{roman}
+\hypersetup{pageanchor=true}
+\chapter*{Objet et statut du cahier}
+\addcontentsline{toc}{chapter}{Objet et statut du cahier}
+Ce cahier prépare la conception d'une application web d'écriture collective et de diffusion de documents PDF sur AWS. Il présente les besoins, le modèle de crédit, le cadrage des versions métier et l'état rapporté du MVP local. Les garanties de quota, de clôture, de diffusion et de charge restent à démontrer.
+
+
+\tableofcontents
+\clearpage
+\pagenumbering{arabic}
+\input{chapitres/01-etat-art}
+\input{chapitres/02-analyse}
+\input{chapitres/03-conception}
+\input{chapitres/04-implementation-resultats}
+\input{chapitres/05-references}
+\end{document}

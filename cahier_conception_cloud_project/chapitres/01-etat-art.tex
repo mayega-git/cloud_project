@@ -1,0 +1,99 @@
+\chapter{État de l'art et étude de l'existant}
+\section{Problématique et méthode de comparaison}
+Un éditeur collaboratif doit concilier une interaction fluide et un contenu partagé cohérent. Le projet y ajoute des contraintes métier : crédit quotidien d'écriture, distribution d'un nombre exact d'exemplaires, contenu actualisé derrière un lien stable et maintien d'une réponse explicite pendant un pic de fréquentation .
+
+L'état de l'art présente les mécanismes utilisables ; l'étude de l'existant observe leur emploi dans des produits. 
+Google Docs est retenu pour l'édition généraliste dans le navigateur et Overleaf pour l'articulation entre collaboration,
+ sources textuelles et production de PDF. Yjs est étudié comme bibliothèque alternative, sans lui attribuer un usage chez ces deux éditeurs.
+
+La comparaison distingue trois niveaux de preuve : \textbf{fonction documentée}, \textbf{mécanisme technique publié} et \textbf{déploiement documenté}. 
+
+\section{Mécanismes de collaboration}
+\subsection{Transformation opérationnelle : OT}
+La transformation opérationnelle ajuste une opération par rapport aux changements intervenus depuis l'état du document connu par son auteur. Si un rédacteur insère du texte avant une zone qu'un autre modifie, les positions doivent être adaptées pour éviter de viser les mauvais caractères. Google l'illustre dans son explication de 2010 \cite{google-ot}.
+
+OT s'inscrit dans un protocole qui gère l'ordre des révisions, les opérations locales en attente et 
+les acquittements. Le protocole historique de Google autorise l'application locale optimiste d'une saisie, 
+puis sa réconciliation avec les opérations échangées avec le serveur \cite{google-protocole}. L'affichage local 
+d'une frappe ne suffit donc pas à définir son acceptation durable par le système.
+
+\subsection{Types de données répliquées sans conflit : CRDT}
+Une autre famille de solutions organise les données et les opérations pour permettre la fusion de modifications concurrentes. 
+Yjs expose des types partagés et sépare le modèle de données du transport et des intégrations avec les éditeurs \cite{yjs-intro}. 
+Sa documentation décrit des mises à jour commutatives, associatives et idempotentes ; les répliques convergent lorsqu'elles ont reçu toutes les mises à jour \cite{yjs-updates}.
+
+Cette propriété ne remplace pas le contrôle des autorisations, la persistance ni l'application d'un crédit d'écriture partagé.
+ Pour le projet, le choix OT ou CRDT devra être évalué avec les règles d'acceptation des modifications .
+
+\subsection{Transport, présence et historique}
+Un canal de transport livre les messages ; il ne résout pas à lui seul leurs conflits. 
+Overleaf distingue ainsi OT pour réconcilier les modifications et WebSocket pour pousser les changements aux clients \cite{overleaf-collaboration}. 
+La présence et les positions d'écriture sont des informations complémentaires au contenu.
+
+\section{Google Docs : fonctionnement publié et limites de connaissance}
+\subsection{Fonctions pertinentes}
+La documentation Google décrit le partage avec des rôles de lecteur, commentateur et éditeur \cite{google-partage},
+ la consultation et la restauration des versions \cite{google-historique}, ainsi que l'enregistrement automatique et 
+ le téléchargement des documents, dont la production d'un PDF \cite{google-export}. 
+ Ces fonctions fournissent des références d'usage pour le partage, l'historique et la diffusion.
+
+Une limite doit être prise en compte : l'aide Google annonce un maximum de 100 appareils ou onglets pouvant modifier simultanément un même fichier. 
+
+
+\subsection{Architecture du protocole décrite en 2010}
+Dans la publication technique de Google, chaque client conserve ses opérations en attente et sa dernière révision synchronisée.
+ Le serveur traite les opérations et enregistre les révisions. Il acquitte l'émetteur et communique les changements aux autres clients ;
+  ceux-ci les réconcilient avec leur état local \cite{google-protocole}. 
+  Le journal d'opérations et la transformation des positions sont décrits dans l'article consacré à la résolution des conflits \cite{google-ot}.
+
+\umlfigure{google-protocole.png}{1}{Séquence UML simplifiée du protocole Google publié en 2010 ; illustration documentaire, 
+sans prétention sur la pile actuelle.}{fig:google}
+
+
+\section{Overleaf : collaboration et chaîne de production PDF}
+\subsection{Mécanisme de collaboration et outils identifiés}
+Overleaf documente explicitement l'emploi d'OT : les changements sont transmis au serveur, qui les rebase pour
+ faire converger les clients. WebSocket assure la notification des changements \cite{overleaf-collaboration}.
+
+Le dépôt officiel déclare un moteur Node.js, de l'outillage TypeScript, ainsi que des dépendances ou résolutions associées à
+ React et CodeMirror \cite{overleaf-code}. Ce manifeste identifie des technologies du code publié ; il ne démontre pas à lui seul leur usage dans 
+ chaque écran ni la topologie du service commercial. OT désigne ici le mécanisme de collaboration, tandis que les bibliothèques d'interface répondent 
+ à une autre responsabilité.//quel responsabilite 
+
+\subsection{Architecture sur site documentée}
+La documentation des éditions sur site distingue les services 
+\texttt{web}, \texttt{real-time}, \texttt{document-updater}, \texttt{docstore}, \texttt{filestore} et \texttt{clsi}. 
+Leurs rôles couvrent les requêtes, les sockets, les modifications, les documents, les fichiers binaires et la compilation.
+ Redis intervient dans les mises à jour actives et MongoDB dans le stockage des documents ; le Toolkit peut fournir des conteneurs pour
+  ces dépendances \cite{overleaf-microservices}.
+
+L'infrastructure Server Pro documente Docker et un accès web servi par Nginx. La compilation isolée de Server Pro utilise des conteneurs ;
+ la documentation distingue ce fonctionnement des sous-processus utilisés par Server CE \cite{overleaf-infra,overleaf-microservices}.
+
+\umlfigure{overleaf-composants.png}{1}{Diagramme UML de composants : vue simplifiée des éditions Overleaf sur site, d'après leur documentation. Les dépendances expriment les échanges principaux.}{fig:overleaf}
+
+
+
+\subsection{Persistance et limites de transposition}
+La documentation de sauvegarde indique que Redis contient notamment des mises à jour en attente avant leur transfert vers MongoDB et 
+recommande la persistance AOF \cite{overleaf-backups}. Ce point attire l'attention sur la distinction entre données en mémoire et données récupérables :
+ une politique de cache ne constitue pas, à elle seule, une preuve de conservation des écritures acceptées.
+
+Overleaf montre également l'intérêt de séparer édition et génération PDF. Le sujet demandé porte toutefois sur du texte simple : il n'impose ni la saisie LaTeX ni un moteur de compilation TeX pour l'application. LaTeX est ici le format du cahier de conception.
+
+\section{Synthèse comparative et enseignements}
+\begin{table}[H]\small
+\begin{tabularx}{\linewidth}{@{}L{31mm}YYY@{}}\toprule
+Critère & Google Docs & Overleaf & Projet étudié\\\midrule
+Collaboration & OT dans les articles historiques de 2010 & OT et WebSocket documentés & Conservation et convergence obligatoires ; mécanisme à choisir\\
+Historique & Consultation et restauration documentées & Historique présent dans le code et les services publiés ; modalités non évaluées ici & Consultation et restauration obligatoires\\
+Production PDF & Téléchargement / impression PDF documentés & Service de compilation identifié sur site & PDF actuel, complet et cohérent\\
+Infrastructure connue & Pile actuelle complète non établie & Docker, Nginx, Redis, MongoDB et services sur site documentés & AWS, une région et S3 imposés\\
+Plafonds métier & Garanties spécifiques non établies par les sources étudiées & Garanties spécifiques non établies par les sources étudiées & Téléchargements exacts et crédit quotidien imposés\\
+Validation & Aucune extrapolation de charge retenue & Aucune extrapolation de charge retenue & Tests et preuves propres au projet requis\\\bottomrule
+\end{tabularx}
+\caption{Comparaison limitée aux faits documentés et aux besoins du sujet.}
+\end{table}
+
+L'étude fait ressortir quatre responsabilités à examiner lors de la conception : synchroniser les modifications, définir leur acceptation, produire une version PDF cohérente et contrôler les consommations métier. La convergence d'un éditeur ne garantit pas l'exactitude d'un compteur de téléchargements. De même, un fichier disponible dans S3 ne suffit pas à établir une limitation du nombre de distributions.
+

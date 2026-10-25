@@ -1,0 +1,20 @@
+@startuml
+!pragma layout smetana
+!include style.puml
+left to right direction
+actor "Rédacteur" as R
+rectangle "Éditeur collaboratif : rédaction" {
+ usecase "Se présenter\nEF-01" as U1
+ usecase "Créer un document\nEF-02" as U2
+ usecase "Donner accès\nEF-03" as U3
+ usecase "Écrire à plusieurs\nEF-04 à EF-08" as U4
+ usecase "Consulter les versions\nEF-09, EF-10" as U5
+ usecase "Restaurer une version\nEF-11" as U6
+}
+R -- U1
+R -- U2
+R -- U3
+R -- U4
+R -- U5
+R -- U6
+@enduml

@@ -1,0 +1,21 @@
+@startuml
+!include style.puml
+hide footbox
+participant "Client A" as A
+participant "Serveur de collaboration" as S
+participant "Client B" as B
+note over A,B : Même révision initiale r
+A -> A : Appliquer localement a
+B -> B : Appliquer localement b
+A -> S : Envoyer a, révision r
+B -> S : Envoyer b, révision r
+S -> S : Enregistrer a en r+1
+S --> A : Acquitter a
+S -> B : Transmettre a, révision r+1
+B -> B : Transformer a et la copie locale de b\n(b original est déjà en transit)
+S -> S : Transformer b par rapport à a\nEnregistrer en r+2
+S --> B : Acquitter b
+S -> A : Transmettre b transformé
+A -> A : Intégrer b transformé
+note over A,B : Après intégration de toutes les opérations : convergence
+@enduml

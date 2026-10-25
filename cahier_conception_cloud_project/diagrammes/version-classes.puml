@@ -1,0 +1,38 @@
+@startuml
+!include style.puml
+title Historique et branches — classes conceptuelles
+class "Projet" as Project {
+  propriétaire
+  fuseau IANA
+  échéance quotidienne
+}
+class "Branche" as Branch {
+  numéro
+  version active
+}
+class "Version métier" as Version {
+  numéro
+  état : OPEN / CLOSING / FROZEN
+  référence du pad
+  révision finale
+}
+class "Provenance" as Origin {
+  branche source
+  version source
+  révision source
+}
+class "Clôture" as Closure {
+  identifiant stable
+  cause
+  échéance d'admission
+  avancement
+}
+Project "1" *-- "1..*" Branch
+Branch "1" *-- "1..*" Version
+Branch "0..1" --> "1" Origin : issue de
+Closure "0..*" --> "1" Version : fige
+note right of Branch
+Au plus une version OPEN
+ou CLOSING par branche.
+end note
+@enduml

@@ -1,0 +1,24 @@
+@startuml
+!include style.puml
+title Invitation d'une adresse encore inconnue
+actor "Propriétaire" as O
+participant "Backend métier" as B
+database "Stockage" as D
+participant "Relais e-mail" as E
+actor "Destinataire" as R
+participant "Vérification e-mail" as A
+O -> B : inviter sur une branche (READ / WRITE)
+B -> D : PENDING, empreinte du jeton,\néchéance et état d'envoi
+B -> E : envoyer le lien
+E --> R : message
+R -> A : demander puis saisir un code
+A --> R : adresse vérifiée et session
+R -> B : accepter explicitement le jeton
+B -> D : contrôler adresse, état et délai;\ncréer la permission de branche
+D --> B : ACCEPTED
+B --> R : accès à cette branche
+note over O,R
+Le lien seul ne donne aucun droit.
+Le propriétaire garde toutes les branches.
+end note
+@enduml

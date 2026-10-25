@@ -1,0 +1,35 @@
+@startuml
+!include style.puml
+title Crédit et écritures — classes conceptuelles (cible)
+class "Rédacteur" as User {
+  identité stable
+}
+class "Consommation journalière" as Daily {
+  journée UTC
+  accepté : entier
+  plafond : 10 000
+}
+class "Opération d'écriture" as Op {
+  identifiant stable
+  coût en points de code
+  état
+}
+class "Contrôle du crédit" as Credit {
+  calculer le coût()
+  autoriser ou refuser()
+}
+class "Traitement de l'éditeur" as Editor {
+  enregistrer la révision()
+  acquitter()
+}
+User "1" -- "0..*" Daily
+User "1" -- "0..*" Op
+Credit ..> Daily : vérifie
+Credit ..> Op : évalue
+Editor ..> Credit : demande une décision
+note bottom of Credit
+Conception cible : le débit durable et
+la révision ne forment pas encore
+une transaction commune démontrée.
+end note
+@enduml

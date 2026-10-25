@@ -1,0 +1,35 @@
+@startuml
+!include style.puml
+title Crédit et écriture — séquence cible à valider
+actor "Rédacteur" as U
+participant "Client" as C
+participant "Extension d'édition" as E
+participant "Service métier" as B
+database "Stockage métier" as D
+participant "Moteur d'édition" as M
+U -> C : saisit un texte
+C -> E : opération identifiée
+E -> B : contrôle identité, droits, état et coût
+B -> D : lire consommation UTC et état d'opération
+alt reliquat insuffisant ou droit perdu
+  B --> E : refus sans débit définitif
+  E --> C : texte récupérable
+else contrôle favorable
+  B --> E : admission conditionnelle
+  E -> M : appliquer la modification
+  alt révision enregistrée
+    M --> E : révision persistée
+    E -> B : confirmer / réconcilier
+    B -> D : débit unique à établir
+    E --> C : acquittement après preuve
+  else échec ou reprise
+    M --> E : résultat incertain
+    E -> B : retrouver l'état de l'opération
+    B --> E : décision explicite
+  end
+end
+note over B,M
+  Frontière entre deux systèmes :
+  l'atomicité reste à concevoir et tester.
+end note
+@enduml

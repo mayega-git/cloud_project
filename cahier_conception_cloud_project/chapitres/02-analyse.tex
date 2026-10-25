@@ -1,0 +1,298 @@
+\chapter{Analyse et spécification des exigences}
+
+\section{Contexte, parties prenantes et périmètre}
+L'association prépare collectivement un journal numérique. Plusieurs centaines de rédacteurs écrivent et corrigent les textes. 
+À une heure annoncée, des visiteurs utilisent un lien public limité à 500 exemplaires ; les corrections se poursuivent pendant cette diffusion \cite[p. 1]{sujet}.
+
+\begin{longtable}{@{}L{34mm}L{32mm}L{87mm}@{}}
+\toprule Partie prenante & Type  & Interaction\\\midrule\endhead
+Rédacteur & Utilisateur final & Créer, partager, écrire, consulter/restaurer des versions et créer des liens.\\
+Créateur d'un document ou d'un lien & Rôle d'un rédacteur & Donner accès au document ; choisir le tirage du lien ; recevoir l'avis d'épuisement.\\
+Visiteur anonyme & Utilisateur final & Obtenir le PDF actuel et connaître l'état de sa demande sans déclarer d'identité.\\
+Association étudiante & Propriétaire métier & Publier le journal et consulter les documents ouverts, les liens et les blocages.\\
+Porteur du projet & Développeur / gestionnaire & Déployer, tester, expliquer les choix, supprimer les ressources et justifier le coût.\\
+Jury & Partie prenante externe & Évaluer la conception et les preuves ; écrire des tests à partir de l'API.\\
+AWS & Fournisseur externe & Héberger les ressources ; conserver les fichiers distribués dans S3.\\
+Relais d'e-mail & Système externe & Remettre les codes de vérification et les notifications ; fournisseur et mode d'intégration non choisis.\\\bottomrule
+\end{longtable}
+Une même personne peut exercer plusieurs rôles. Les droits de consultation de la supervision restent à préciser ; le rôle de l'association n'impose pas à lui seul un type de compte administrateur.
+
+\textbf{Inclus :} texte simple, partage, collaboration et présence, versions, liens limités, export PDF actuel, crédit quotidien, blocage temporaire, notification et supervision. 
+\textbf{Non demandés explicitement :} traitement et presentation de texte riche.
+
+\section{Exigences utilisateur}
+\begin{longtable}{@{}L{15mm}L{99mm}@{}}
+\toprule ID & Besoin utilisateur \\\midrule\endhead
+EU-01 & Un rédacteur doit pouvoir créer un document textuel et le partager avec d'autres rédacteurs. \\
+EU-02 & Plusieurs rédacteurs doivent pouvoir travailler simultanément sur le même texte avec une vue partagée des changements, des présences et des positions d'écriture.\\
+EU-03 & Un rédacteur autorisé doit pouvoir consulter les états précédents d'un document ; son propriétaire doit pouvoir en restaurer un. \\
+EU-04 & Un rédacteur doit pouvoir diffuser le PDF actuel d'un document par un même lien, dans la limite du nombre de téléchargements qu'il a choisi.\\
+EU-05 & Chaque rédacteur doit être soumis au même crédit quotidien sur tous ses appareils et les tentatives répétées de contournement doivent entraîner un blocage temporaire.\\
+EU-06 & Un visiteur doit pouvoir utiliser un lien sans s'identifier et connaître l'issue de sa demande, y compris pendant le pic de publication. \\
+EU-07 & L'association doit pouvoir consulter les documents ouverts, les liens actifs et leurs capacités restantes, ainsi que les personnes bloquées.\\
+EU-08 & Le créateur d'un lien doit être averti par e-mail lorsque celui-ci est épuisé. \\
+\bottomrule\end{longtable}
+\textbf{Justifications métier.} 
+EU-01 et EU-02 permettent la rédaction commune ; EU-03 permet de revenir sur l'évolution du texte ;
+ EU-04 et EU-06 organisent la publication publique et ses corrections ; 
+ EU-05 applique les limites du service ; 
+ EU-07 rend la situation consultable ; 
+ EU-08 informe le responsable de la diffusion.
+
+\section{Exigences fonctionnelles détaillées}
+Chaque énoncé exprime une fonction. La source et le besoin parent assurent sa traçabilité et portent sa justification métier. Les critères constituent un protocole de vérification à préparer, et non des résultats déjà obtenus. Les mentions « à préciser » renvoient au registre des questions de la section~\ref{sec:questions}.
+\subsection{Identification, documents et partage}
+\reqEF{EF-01}{Présentation du rédacteur}{Le système doit permettre à un rédacteur de se présenter au moyen d'un nom et d'une adresse e-mail.}{Le nom et l'adresse sont saisis ; un code envoyé par e-mail vérifie la possession de l'adresse avant l'activation d'une identité métier stable. Ce code est une précision décidée par le porteur, non une obligation formulée dans le sujet.}
+\reqEF{EF-02}{Création d’un document}{Le système doit permettre à un rédacteur de créer un document textuel.}{Après une création réussie, un document identifiable peut être ouvert et édité.}
+\reqEF{EF-03}{Partage du document}{Le système doit permettre au créateur d'un document d'accorder son accès à un autre rédacteur.}{Le propriétaire attribue la lecture ou l'écriture sur une branche ; l'écriture ne vaut que pour sa version active ouverte. Le mode de désignation du destinataire reste à préciser.}
+\reqEF{EF-04}{Ouverture d’un document accessible}{Le système doit permettre à un rédacteur disposant d'un accès d'ouvrir le document correspondant.}{Le document créé ou partagé est accessible au rédacteur concerné. C'est une décomposition opérationnelle du partage, pas une politique de rôles supplémentaire.}
+\subsection{Collaboration, présence et versions}
+\reqEF{EF-05}{Écriture simultanée}{Le système doit permettre à plusieurs rédacteurs de soumettre simultanément des modifications d'un même document.}{Plusieurs sessions autorisées peuvent modifier la version active ouverte d'une branche, y compris à la même position ; une version figée refuse l'écriture.}
+\reqEF{EF-06}{Diffusion des modifications}{Le système doit communiquer aux autres participants les modifications acceptées du document.}{Une modification acceptée dans une session devient visible dans les autres sessions participantes. Délai : voir ENF « presque aussitôt », à chiffrer.}
+\reqEF{EF-07}{Affichage des présences}{Le système doit afficher les rédacteurs présents dans le document.}{Des sessions actives distinctes apparaissent dans la vue de présence. Définition de présence et délai après déconnexion à préciser.}
+\reqEF{EF-08}{Affichage des positions}{Le système doit afficher la position d'écriture des autres rédacteurs présents.}{Le déplacement de la position d'écriture dans une session est reflété pour les autres ; représentation exacte à choisir.}
+\reqEF{EF-09}{Conservation des versions}{Le système doit conserver des versions précédentes du document.}{Une branche garde ses versions métier figées et leurs révisions techniques consultables ; la politique de rétention reste à préciser. Une frappe ne crée pas à elle seule une nouvelle version métier.}
+\reqEF{EF-10}{Consultation d’une version}{Le système doit permettre à un rédacteur de consulter une version précédente du document.}{Le droit de lecture de la branche donne accès à ses versions et révisions historiques, sans confondre leur contenu avec celui de la version active.}
+\reqEF{EF-11}{Restauration d’une version}{Le système doit permettre à un rédacteur de restaurer une version précédente du document.}{Le propriétaire choisit une version et une révision source ; la restauration crée une nouvelle branche et sa première version éditable, sans modifier la source ni recopier automatiquement ses permissions.}
+\subsection{Liens et distribution}
+\reqEF{EF-12}{Création d’un lien}{Le système doit permettre à un rédacteur de créer un lien de téléchargement pour un document.}{La création réussie fournit un lien utilisable pour le document désigné.}
+\reqEF{EF-13}{Choix du nombre de téléchargements}{Le système doit permettre au créateur de choisir le nombre de téléchargements autorisés du lien.}{Le nombre choisi est associé au lien et vérifiable ; règles sur zéro, nombres négatifs et plafond à préciser.}
+\reqEF{EF-14}{Fourniture du PDF}{Le système doit fournir un fichier au format PDF lors d'un téléchargement autorisé.}{Le fichier obtenu est un PDF lisible contenant le document.}
+\reqEF{EF-15}{Sélection du contenu actuel}{Le système doit déterminer le contenu téléchargé à partir de l'état actuel du document lors de l'utilisation du lien.}{Après modification du document, le même lien restitue la correction lors d'une utilisation ultérieure. Instant précis de référence à valider.}
+\reqEF{EF-16}{Refus au-delà du plafond}{Le système doit refuser un téléchargement supplémentaire lorsque le nombre autorisé est épuisé.}{Pour un lien de capacité N, des appels concurrents ne produisent jamais plus de N distributions comptabilisées. Définition de la comptabilisation à valider.}
+\reqEF{EF-17}{Affichage de l’épuisement}{Le système doit indiquer au visiteur que le lien est épuisé lorsqu'aucun téléchargement n'est encore autorisé.}{Une demande après épuisement reçoit un résultat explicite « épuisé ».}
+\reqEF{EF-18}{Téléchargement anonyme}{Le système doit permettre à un visiteur de télécharger sans fournir d'identité.}{Un visiteur ne disposant ni de nom saisi ni d'adresse e-mail peut obtenir un téléchargement autorisé.}
+\reqEF{EF-19}{Affichage de la disponibilité}{Le système doit indiquer au visiteur lorsqu'il peut télécharger immédiatement.}{Un résultat de demande autorisée indique clairement la disponibilité immédiate du téléchargement.}
+\reqEF{EF-20}{Affichage de l’attente}{Le système doit indiquer au visiteur lorsqu'il doit patienter.}{Si le système diffère le traitement, la demande reçoit un état explicite d'attente. Cela n'impose pas un service de file particulier.}
+\reqEF{EF-21}{Information des visiteurs présents}{Le système doit informer de l'épuisement les visiteurs encore présents après le dernier exemplaire distribué.}{Un visiteur déjà en attente apprend l'état final sans rester indéfiniment en attente ; délai maximal à chiffrer.}
+\reqEF{EF-22}{Notification au créateur}{Le système doit envoyer un e-mail au créateur du lien lorsque le dernier téléchargement autorisé est consommé.}{Le passage de capacité restante 1 à 0 déclenche l'avis destiné à l'adresse du créateur. Délai, reprise sur échec et doublons à spécifier.}
+\subsection{Crédit quotidien et abus}
+\reqEF{EF-23}{Attribution du crédit quotidien}{Le système doit attribuer à chaque rédacteur un crédit d'écriture de 10\,000 caractères par jour.}{Au début d'une période quotidienne, le crédit accordé est de 10\,000 caractères selon l'unité de comptage retenue.}
+\reqEF{EF-24}{Décompte de l’écriture}{Le système doit prendre en compte l'écriture acceptée dans le crédit du rédacteur concerné.}{Une écriture acceptée réduit le crédit conformément à la règle de comptage ; les réinsertions volontaires sont contrôlées. Le coût de la copie initiale d'une nouvelle version reste à valider.}
+\reqEF{EF-25}{Refus du dépassement de crédit}{Le système doit refuser l'écriture excédant le crédit restant du rédacteur.}{Un rédacteur ne peut faire accepter un total supérieur à 10\,000 caractères sur la période ; rejet complet ou partiel d'une opération à préciser.}
+\reqEF{EF-26}{Crédit commun aux appareils}{Le système doit appliquer un crédit commun aux appareils utilisés simultanément par un même rédacteur.}{Avec deux appareils consommant le reliquat en même temps, le total accepté demeure inférieur ou égal au crédit de la période}
+\reqEF{EF-27}{Recharge quotidienne}{Le système doit recharger le crédit d'écriture chaque jour.}{Après changement de période quotidienne, le rédacteur retrouve le crédit prévu ; fuseau et instant de recharge à fixer.}
+\reqEF{EF-28}{Détection des abus}{Le système doit repérer les tentatives répétées d'outrepassement des limites.}{Une séquence dépassant une règle de détection validée est signalée comme abusive. Seuil et fenêtre temporelle à définir}
+\reqEF{EF-29}{Blocage temporaire}{Le système doit bloquer temporairement une personne repérée pour ces tentatives.}{Après détection, les actions couvertes par le blocage sont refusées pendant la durée retenue ; identité ciblée, périmètre et durée à préciser}
+\subsection{Consultation de l’état}
+\reqEF{EF-30}{Consultation des documents ouverts}{Le système doit permettre à l'association de consulter les documents ouverts.}{La vue d'état restitue les documents répondant à la définition validée d'« ouvert ».}
+\reqEF{EF-31}{Consultation des liens actifs}{Le système doit permettre à l'association de consulter les liens actifs.}{La vue d'état identifie les liens répondant à la définition validée d'« actif ».}
+\reqEF{EF-32}{Consultation des téléchargements restants}{Le système doit présenter le nombre de téléchargements restants de chaque lien actif.}{Le reste présenté correspond au nombre autorisé diminué des consommations comptabilisées ; fraîcheur à préciser.}
+\reqEF{EF-33}{Consultation des personnes bloquées (non prioritaire)}{Le système doit permettre à l'association de consulter les personnes actuellement bloquées.}{Une personne sous blocage apparaît dans la vue, puis cesse d'y être considérée bloquée à l'expiration.}
+
+\section{Règles métier et propriétés prioritaires}
+\textbf{RM-01 --- Tirage d'un lien.} Pour un lien $L$, la capacité initiale $N_L$ est choisie à sa création. Le nombre de consommations comptabilisées $D_L(t)$ doit satisfaire $0 \leq D_L(t) \leq N_L$ à tout instant. Lorsqu'au moins $N_L$ demandes admissibles aboutissent, le système doit permettre les $N_L$ consommations prévues.
+
+\textbf{RM-02 --- Modifications acceptées.} Toute modification acceptée doit être intégrée selon la sémantique d'édition retenue. Après réception et traitement de toutes les opérations, les participants doivent voir le même document. L'égalité des copies ne prouve pas seule l'absence de perte : elles pourraient avoir perdu la même modification. Une suppression ultérieure légitime ne signifie pas non plus qu'une insertion antérieure n'a jamais été intégrée. Source : C2 ; EF-05, EF-06 ; P0.
+
+\textbf{RM-03 --- Contenu actuel.} Le PDF doit correspondre à un état complet et cohérent du document à l'instant de référence de l'utilisation du lien. Il ne doit pas assembler des fragments de versions incompatibles. Le même lien doit refléter les corrections intervenues depuis sa création. 
+
+\textbf{RM-04 --- Crédit quotidien.} Pour un rédacteur $u$ et une journée $j$, le total d'écriture facturée et acceptée $E(u,j)$ doit satisfaire $E(u,j) \leq 10\,000$, tous appareils confondus. L'unité de caractère, les opérations facturées, la journée et l'identité commune doivent être définies avant les tests définitifs.
+
+\section{Exigences non fonctionnelles et contraintes}
+La classification reprend les exigences \textbf{produit}, \textbf{organisationnelles} et \textbf{externes} du cours \cite[diapositives 9--14]{cours}. Les invariants RM-01 à RM-04 sont également reliés aux qualités de fiabilité et de cohérence, sans devenir des règles différentes.
+\subsection{Exigences produit}
+\reqENF{ENF-01}{Exactitude du tirage}{Le système doit préserver RM-01 sous accès concurrents.}{Soumettre davantage de demandes concurrentes que la capacité, notamment N=1 puis N=500 ; constater zéro dépassement et N consommations possibles lorsque les demandes admissibles aboutissent.}
+\reqENF{ENF-02}{Conservation des modifications}{Le système doit préserver les modifications acceptées définies par RM-02, y compris lorsque les rédacteurs écrivent au même endroit.}{Journaliser les opérations acceptées et vérifier leur intégration avec un oracle adapté au modèle retenu ; inclure insertions, suppressions et remplacements concurrents.}
+\reqENF{ENF-03}{Convergence des participants}{Les participants doivent finir par voir le même document après traitement des modifications acceptées.}{Après arrêt des nouvelles éditions et traitement des messages, comparer toutes les copies. Zéro divergence dans les essais ; délai maximal d’observation à fixer (Q-11).}
+\reqENF{ENF-04}{Cohérence et fraîcheur du PDF}{Le système doit préserver RM-03 pendant les modifications et les téléchargements simultanés.}{Comparer le texte extrait du PDF à la révision de référence acquise à T1 et vérifier que le fichier est lisible et complet. Q-03 détermine T1.}
+\reqENF{ENF-05}{Intégrité du crédit partagé}{Le système doit préserver RM-04 même lorsqu’un rédacteur écrit depuis plusieurs appareils simultanément.}{Faire consommer simultanément un faible reliquat sur deux appareils ; vérifier le total par identité et journée et les refus au-delà de la limite.}
+\reqENF{ENF-06}{Rapidité de collaboration}{Les modifications des autres participants doivent devenir visibles presque aussitôt.}{Mesurer la latence de diffusion et publier les percentiles et le maximum ; seuil absent du sujet, à définir en Q-11.}
+\reqENF{ENF-07}{Capacité pendant la publication}{Le système doit supporter 15\,000 visiteurs, dont 80 \% dans la première minute, pendant que 300 rédacteurs continuent d’écrire.}{Exécuter le profil V-05 en conservant toutes les réponses et opérations. Les 12 000 arrivées de première minute valent 200/s en moyenne ; ni les rafales ni le débit total de requêtes ne sont définis par ce calcul.}
+\reqENF{ENF-08}{Réponse explicite sous charge}{Chaque visiteur doit obtenir pendant le pic une réponse indiquant téléchargement immédiat, attente ou épuisement.}{Réconcilier chaque demande avec son résultat métier. Une erreur technique inexpliquée ou une attente sans retour ne valide pas le besoin ; délais à fixer en Q-11.}
+\reqENF{ENF-09}{Propagation de l’épuisement}{Les visiteurs encore présents doivent apprendre rapidement l’épuisement du lien.}{Mesurer du dernier téléchargement comptabilisé à l’affichage chez les visiteurs actifs ; seuil à définir en Q-11.}
+\reqENF{ENF-10}{Fin des traitements devenus inutiles}{Le système doit cesser de proposer la distribution au-delà de la capacité d’un lien épuisé.}{Vérifier l’absence de nouvelle autorisation et examiner les traitements déclenchés après épuisement. La portée des travaux à arrêter reste à préciser (Q-14) ; l’édition et les autres liens doivent rester utilisables.}
+\reqENF{ENF-11}{Protection des clés AWS}{Aucune clé d’accès AWS ne doit apparaître dans le code ou dans le dépôt.}{Inspecter les fichiers, l’historique Git et les artefacts produits avec un contrôle de secrets et une revue de configuration ; conserver le résultat sans reproduire de secret.}
+\reqENF{ENF-12}{Permissions minimales}{Chaque composant doit disposer seulement des droits nécessaires à ses fonctions.}{Relier chaque permission à une action et à une ressource nécessaires ; examiner les permissions effectives et tester le refus d’opérations non requises.}
+\subsection{Exigences organisationnelles et de réalisation}
+Ces contraintes sont imposées par les règles du projet. Le fait qu'AWS soit un fournisseur externe ne les classe pas automatiquement parmi les exigences externes au sens de Sommerville.
+\reqENF{ENF-13}{Environnement AWS}{L’application doit être déployée sur le propre compte AWS du porteur du projet, en plan gratuit.}{Inventorier les ressources et documenter le compte et son plan sans exposer d’identifiants sensibles. Le sujet ne fixe pas de budget chiffré.}
+\reqENF{ENF-14}{Région unique}{Toutes les ressources du projet doivent être dans une seule région AWS.}{Produire l’inventaire régional ; examiner toute proposition de service global avant de l’adopter, afin de clarifier sa compatibilité avec cette règle.}
+\reqENF{ENF-15}{Stockage des exports}{Les fichiers proposés au téléchargement doivent être conservés dans S3.}{Relier un PDF distribué à l’objet S3 correspondant ; vérifier configuration et contenu. Cette contrainte n’impose pas S3 pour toutes les données applicatives.}
+\reqENF{ENF-16}{Travail personnel}{Le projet doit rester strictement personnel.}{Le porteur doit pouvoir expliquer les choix et l’ensemble rendu.}
+\reqENF{ENF-17}{Bonnes pratiques}{La réalisation doit appliquer les bonnes pratiques vues en cours.}{Établir la liste des pratiques depuis les supports pertinents et la relier aux preuves ; la liste exhaustive ne peut pas être déduite du seul cours de spécification fourni.}
+\reqENF{ENF-18}{Reproductibilité du rendu}{Le dépôt Git doit contenir le code, la description d’infrastructure, les tests et un README expliquant comment déployer, tester et supprimer l’ensemble.}{Un lecteur suit le README depuis les prérequis déclarés ; contrôler la création puis la suppression des ressources. Aucun outil d’infrastructure particulier n’est imposé.}
+\reqENF{ENF-19}{Dossier de conception}{Le rendu doit comprendre un dossier de conception.}{Vérifier la présence du dossier et la justification des choix. Le présent cahier en constitue la première partie.}
+\reqENF{ENF-20}{API vérifiable par le jury}{La description de l’API doit permettre au jury d’écrire son propre test.}{Documenter entrées, sorties, erreurs, états et sémantiques de consommation et d’acceptation ; effectuer une revue de reproductibilité indépendante.}
+\reqENF{ENF-21}{Coût justifié}{Le rendu doit fournir une preuve de ce que le projet a coûté.}{Présenter un relevé daté avec période et périmètre ; distinguer coûts, crédits et estimations. Le plan gratuit ne constitue pas à lui seul une preuve de coût nul.}
+\reqENF{ENF-22}{Format du cahier}{Le cahier doit être maintenu en LaTeX compilable, en noir et blanc, avec des diagrammes UML dont les sources sont en PlantUML.}{Compiler les sources, vérifier la présentation et régénérer les diagrammes à partir des fichiers .puml.}
+\reqENF{ENF-23}{Délai de réalisation}{La réalisation doit tenir du vendredi soir au lundi matin.}{Conserver un planning et des traces datées ; les dates civiles exactes ne sont pas fournies.}
+\reqENF{ENF-24}{Rapport de test}{Le rendu doit comprendre un rapport de test avec méthode, objectifs, résultats bruts, analyse et preuves des deux contraintes prioritaires.}{Relier les résultats aux scénarios, à la configuration et à la version testée ; distinguer résultats obtenus et limites. Aucun test de l’application n’est déclaré exécuté dans ce cahier.}
+\subsection{Exigences externes}
+Le sujet ne nomme aucune loi, certification ou contrainte réglementaire précise. Aucune conformité juridique particulière n'est donc déclarée acquise dans ce registre. L'utilisation de noms et d'adresses e-mail nécessite d'identifier ultérieurement les obligations effectivement applicables ; les exigences correspondantes devront être sourcées et ajoutées sans inventer une norme imposée par le sujet.
+
+\subsection{Diagramme de contexte}
+\umlfigure{contexte-systeme.png}{1}{Diagramme de contexte UML : le système, ses acteurs humains et ses dépendances externes.}{fig:contexte-systeme}
+\subsection{Diagramme de packages}
+\umlfigure{packages-systeme.png}{1}{Packages UML : édition, règles métier et conservation des données.}{fig:packages-systeme}
+L'éditeur collaboratif gère le texte partagé, la présence et les révisions techniques. Son interface doit signaler le gel et permettre la récupération du texte local refusé ; l'extension métier doit participer au contrôle de l'édition. Le backend gère l'identité stable, les sessions, les droits de branche, les versions métier, les échéances de clôture, le crédit, les liens et la supervision. Le relais e-mail remet les codes de vérification et les notifications. Le module de stockage conserve les états, les permissions, la provenance, les échéances, les références des documents et révisions, ainsi que les PDF distribués. Ces packages sont des frontières logiques ; le diagramme ne promet ni transaction commune ni service déployé par composant.
+
+Le diagramme suivant présente les fonctions accessibles aux acteurs.
+\subsection{Diagramme de cas d'utilisation}
+\umlfigure{cas-utilisation-global.png}{1}{Diagramme UML global des cas d'utilisation et des acteurs du projet.}{fig:cas-utilisation-global}
+
+\section{Scénarios ou cas d'utilisation structurés}
+\subsection{SC-01 --- Créer et partager un document}
+\begin{longtable}{@{}L{36mm}L{116mm}@{}}
+\toprule
+Acteur principal & Rédacteur qui crée le document.\\
+Acteurs secondaires & Second rédacteur, auquel le créateur partage le document.\\
+Précondition & Les deux rédacteurs sont identifiés par leur nom et leur adresse e-mail ; le document à créer n'existe pas encore.\\
+Scénario & 1. Le rédacteur principal crée un document textuel.\newline
+2. Il désigne le second rédacteur et lui accorde l'accès au document.\newline
+3. Le second rédacteur ouvre le document partagé.\newline
+Variantes : l'identité du destinataire est ambiguë ou inexistante, les données saisies sont invalides, ou la création échoue. Le comportement attendu dans ces cas reste à préciser. En parallèle, d'autres documents peuvent être créés ou ouverts sans effet de bord sur celui-ci.\\
+Post-condition & Le document existe et les deux rédacteurs concernés peuvent y accéder.\\
+\bottomrule
+\end{longtable}
+\subsection{SC-02 --- Écrire simultanément au même endroit}
+\begin{longtable}{@{}L{36mm}L{116mm}@{}}
+\toprule
+Acteur principal & Rédacteurs qui éditent simultanément le même document.\\
+Acteurs secondaires & Autres participants au document, qui reçoivent les modifications et les positions d'écriture.\\
+Précondition & La version active de la branche est OUVERTE aux rédacteurs ; leur crédit est disponible et aucun n'est bloqué ; au moins deux rédacteurs éditent la même zone.\\
+Scénario & 1. Les rédacteurs soumettent leurs modifications concurrentes.\newline
+2. Le système détermine lesquelles sont acceptées et diffuse les changements ainsi que les positions.\newline
+3. Après l'arrêt des éditions et le traitement des échanges, les participants voient le même document.\newline
+Variantes : crédit épuisé, déconnexion ou répétition d'une requête après perte de réponse ; les règles d'acceptation et de reprise restent à valider. En parallèle, d'autres rédacteurs peuvent éditer, créer des liens et télécharger le document.\\
+Post-condition & Les modifications acceptées sont intégrées, les vues convergent et les crédits restent conformes.\\
+\bottomrule
+\end{longtable}
+\textit{Traçabilité :} EU-02, EU-05 ; EF-05 à EF-08, EF-23 à EF-26 ; RM-02, RM-04.
+\subsection{SC-03 --- Consulter puis restaurer une version}
+\begin{longtable}{@{}L{36mm}L{116mm}@{}}
+\toprule
+Acteur principal & Propriétaire de la branche source.\\
+Acteurs secondaires & Rédacteurs autorisés sur la branche source.\\
+Précondition & Le propriétaire peut consulter la version et la révision choisies dans la branche source.\\
+Scénario & 1. Le propriétaire choisit une version et une révision antérieures et consulte leur contenu.\newline
+2. Il demande la restauration ; le système crée une branche distincte et sa première version éditable à partir de ce contenu.\newline
+3. Le propriétaire attribue les accès à la nouvelle branche.\newline
+Variantes : la source est absente ou inaccessible ; la création échoue et ne doit pas altérer la branche source. En parallèle, les rédacteurs peuvent continuer sur la branche source sans modifier la nouvelle.\\
+Post-condition & La branche source et son historique restent inchangés ; la nouvelle branche conserve sa provenance et évolue indépendamment.\\
+\bottomrule
+\end{longtable}
+\subsection{SC-04 --- Télécharger après une correction sans changer de lien}
+\begin{longtable}{@{}L{36mm}L{116mm}@{}}
+\toprule
+Acteur principal & Visiteur anonyme qui utilise le lien de téléchargement.\\
+Acteurs secondaires & Créateur du lien et rédacteur qui corrige le document.\\
+Précondition & Un lien valide non épuisé existe ; le document est à l'état V1.\\
+Scénario & 1. Le rédacteur effectue une correction acceptée, qui produit l'état V2.\newline
+2. Le visiteur utilise le lien initial.\newline
+3. Le système autorise la demande et fournit un PDF cohérent correspondant à un état de référence qui inclut la correction.\newline
+Variantes : une correction survient pendant la génération du PDF ; le fichier doit correspondre à un instant de référence défini. En cas d'échec du transfert, le traitement de la consommation dépend de la règle à valider. En parallèle, de nouvelles éditions et d'autres demandes de téléchargement peuvent avoir lieu.\\
+Post-condition & Le visiteur reçoit le PDF actuel par le même lien ; la capacité est consommée selon une règle définie.\\
+\bottomrule
+\end{longtable}
+\textit{Traçabilité :} EU-04, EU-06 ; EF-12 à EF-19 ; RM-01, RM-03.
+\subsection{SC-05 --- Distribuer le dernier exemplaire sous accès concurrents}
+\begin{longtable}{@{}L{36mm}L{116mm}@{}}
+\toprule
+Acteur principal & Visiteur qui demande le dernier téléchargement disponible.\\
+Acteurs secondaires & Autres visiteurs concurrents, créateur du lien, rédacteurs et visiteurs déjà en attente.\\
+Précondition & Le lien possède un seul téléchargement restant.\\
+Scénario & 1. Plusieurs demandes arrivent simultanément ; au plus une consomme le dernier téléchargement.\newline
+2. Le lien devient épuisé ; les autres visiteurs en sont informés et le créateur reçoit un e-mail.\newline
+Variantes : le visiteur autorisé abandonne, la génération du PDF échoue ou l'e-mail ne peut être remis ; les politiques correspondantes restent à définir. En parallèle, les rédacteurs poursuivent les corrections et des visiteurs peuvent déjà attendre.\\
+Post-condition & Aucun dépassement n'a lieu ; les visiteurs présents sont informés de l'épuisement et la notification au créateur est déclenchée. La reprise d'une tentative échouée suit la règle de consommation retenue.\\
+\bottomrule
+\end{longtable}
+\subsection{SC-06 --- Épuiser le crédit depuis plusieurs appareils}
+\begin{longtable}{@{}L{36mm}L{116mm}@{}}
+\toprule
+Acteur principal & Rédacteur qui écrit depuis deux appareils.\\
+Acteurs secondaires & Autres rédacteurs qui modifient les mêmes documents.\\
+Précondition & Le même rédacteur est reconnu sur les deux appareils et dispose d'un faible crédit restant.\\
+Scénario & 1. Les deux appareils soumettent simultanément des modifications.\newline
+2. Le système n'accepte que les écritures compatibles avec le crédit restant ; le total quotidien ne dépasse pas 10\,000 caractères.\newline
+3. Le crédit est rechargé au début de la période quotidienne suivante.\newline
+Variantes : une opération dépasse le reliquat, une demande arrive au changement de journée ou une autre adresse est utilisée ; le traitement dépend des règles de comptage, de calendrier et d'identification. En parallèle, d'autres rédacteurs modifient les mêmes documents.\\
+Post-condition & Le crédit n'est pas négatif, les écritures refusées ne sont pas annoncées comme acceptées et la recharge s'applique à la période suivante.\\
+\bottomrule
+\end{longtable}
+\subsection{SC-07 --- Détecter un abus et observer le blocage}
+\begin{longtable}{@{}L{36mm}L{116mm}@{}}
+\toprule
+Acteur principal & Rédacteur qui tente de dépasser les limites de façon répétée.\\
+Acteurs secondaires & Représentant de l'association qui consulte l'état des personnes bloquées.\\
+Précondition & Les limites sont atteintes et les règles de détection ainsi que la durée du blocage sont définies.\\
+Scénario & 1. Les tentatives répétées déclenchent la détection d'un abus.\newline
+2. Le système applique un blocage temporaire et l'association peut le voir dans l'état de l'application.\newline
+3. À l'expiration, le blocage cesse de s'appliquer.\newline
+Variantes : le rédacteur utilise plusieurs appareils ou identités déclarées ; les garanties dépendent du modèle d'identification. En parallèle, les autres personnes poursuivent leur usage normal.\\
+Post-condition & Le blocage a expiré ; les quotas continuent de s'appliquer indépendamment du blocage.\\
+\bottomrule
+\end{longtable}
+\textit{Traçabilité :} EU-05, EU-07 ; EF-28, EF-29, EF-33.
+\subsection{SC-08 --- Publier au pic et consulter l'état}
+\begin{longtable}{@{}L{36mm}L{116mm}@{}}
+\toprule
+Acteur principal & Visiteur qui utilise le lien pendant le pic de publication.\\
+Acteurs secondaires & Association qui consulte l'état, 14\,999 autres visiteurs et 300 rédacteurs actifs.\\
+Précondition & Le lien est annoncé pour 500 exemplaires ; le document peut encore être corrigé et le système est déployé.\\
+Scénario & 1. 12\,000 visiteurs arrivent au cours de la première minute tandis que les rédacteurs poursuivent leur travail.\newline
+2. Chaque visiteur reçoit un état : téléchargement immédiat, attente ou épuisement.\newline
+3. L'association consulte les documents ouverts, les liens et leurs capacités restantes, ainsi que les personnes bloquées.\newline
+4. Après la dernière consommation, les visiteurs encore présents sont informés de l'épuisement.\newline
+Variantes : les arrivées sont plus concentrées que la moyenne, les visiteurs réessaient ou la génération ralentit ; le profil et les résultats doivent être consignés. En parallèle, l'historique, les notifications et la supervision restent sollicités.\\
+Post-condition & Les limites de téléchargement, d'édition et de crédit sont respectées ; chaque visiteur reçoit une réponse selon les seuils fixés ; les traitements inutiles pour le lien épuisé cessent.\\
+\bottomrule
+\end{longtable}
+
+
+\section{Vérification et traçabilité des contraintes}
+La vérification combine une argumentation sur les mécanismes choisis et des essais reproductibles. Les tests établissent un résultat dans les conditions exécutées ; ils ne démontrent pas seuls une garantie universelle. Un résultat identique sur tous les navigateurs ne suffit pas à établir la conservation de chaque modification acceptée.
+\begin{longtable}{@{}L{15mm}L{31mm}L{65mm}L{38mm}@{}}
+\toprule Source & Exigences principales & Vérification prévue & Preuves attendues\\\midrule\endhead
+C1 & RM-01 ; EF-16 ; ENF-01 & V-01 : capacité 1 puis 500 ; demandes concurrentes au-delà du plafond ; nouvelles tentatives. & Décisions, consommations et refus ; zéro dépassement ; tirage atteignable.\\
+C2 & RM-02 ; EF-05, EF-06 ; ENF-02, ENF-03 & V-02 : éditions au même endroit, insertions, suppressions et remplacements ; arrêt et comparaison. & Opérations acceptées, oracle d'intégration et copies finales.\\
+C3 & RM-03 ; EF-14, EF-15 ; ENF-04 & V-03 : lien créé avant correction ; usage après correction ; édition pendant export. & Révision de référence, PDF et comparaison du texte.\\
+C4 & RM-04 ; EF-23 à EF-27 ; ENF-05 & V-04 : consommation concurrente sur plusieurs appareils puis bascule du jour. & Décompte par identité/journée, acceptations et refus.\\
+C5 & EF-17 à EF-21 ; ENF-07, ENF-08 & V-05 : 15\,000 visiteurs, 12\,000 en première minute ; 300 rédacteurs actifs. & Profil d'arrivée, réponses réconciliées, latences, erreurs et invariants P0.\\
+C6 & EF-21 ; ENF-09, ENF-10 & V-06 : épuisement avec visiteurs encore présents ou en attente. & Délais d'information et absence de nouvelle distribution.\\\bottomrule
+\end{longtable}
+
+Les fonctions restantes font l'objet de vérifications ciblées : création/partage (EF-01 à EF-04), présence et historique (EF-07 à EF-11), notification (EF-22), abus et blocage (EF-28, EF-29), supervision (EF-30 à EF-33). Les ENF-11 à ENF-24 appellent des revues de sécurité, d'infrastructure et de livrables. La future matrice détaillée associera à chaque identifiant un test exécuté et une preuve conservée.
+
+\section{Questions ouvertes et objectifs à valider}\label{sec:questions}
+Les points suivants n'empêchent pas l'extraction des besoins, mais empêchent de figer certaines conditions d'acceptation. Ils seront résolus par des décisions datées, liées aux exigences concernées.
+\begin{longtable}{@{}L{13mm}L{86mm}L{54mm}@{}}
+\toprule ID & Question à trancher & Incidence\\\midrule\endhead
+Q-01 & Un téléchargement est-il consommé à la réservation, à la remise d'un accès au fichier, au début du transfert ou à sa réception complète ? Une nouvelle tentative compte-t-elle à nouveau ? & Plafond exact, abandons, stockage S3 et tests de distribution.\\
+Q-02 & À quel événement une modification est-elle « acceptée » ? & Preuve d'absence de perte et gestion des réponses réseau perdues.\\
+Q-03 & Quel instant précis représente T1 : arrivée de la demande, décision d'autorisation ou capture du contenu ? & PDF actuel et cohérent pendant l'édition.\\
+Q-04 & Quels caractères sont décomptés, avec quelle unité Unicode ? Quel coût retenir pour la copie initiale d'une nouvelle version ou branche ? & Crédit quotidien et équité du comptage ; les autres opérations ont des coûts proposés au chapitre 3.\\
+Q-05 & La journée UTC est proposée pour le quota du rédacteur : à confirmer. Elle reste distincte de la journée locale du propriétaire utilisée pour le versionnage. & Bascule de période et limite quotidienne de 10\,000 caractères imposée par C4.\\
+Q-06 & Décision : nom et e-mail, code de vérification et identité métier stable entre sessions. Reste à définir la reprise d'accès et le traitement de plusieurs adresses d'une même personne. & Crédit commun entre appareils ; la possession d'une adresse ne prouve pas l'unicité d'une personne.\\
+Q-07 & Quels seuils, fenêtre temporelle, durée et périmètre déterminent l'abus et le blocage ? & EF-28 et EF-29 vérifiables.\\
+Q-08 & Décision : lecture sur la branche, écriture sur sa version active ouverte, restauration par le propriétaire vers une nouvelle branche ; les droits révoqués le restent. Restent à préciser la création des liens et l'accès à la supervision. & Contrôle d'accès côté serveur et matrice de droits au chapitre 3.\\
+Q-09 & Décision : révisions techniques dans une version métier, versions successives dans une branche, restauration indépendante. Restent à fixer la rétention et le coût de la copie initiale. & Provenance et clôture décrites au chapitre 3.\\
+Q-10 & « Version ouverte » désigne ici l'état éditable d'une branche. Que signifient encore « document ouvert » dans la supervision, « lien actif » et « personne présente » ? & Éviter de confondre état métier, présence en ligne et état de diffusion.\\
+Q-11 & Quels seuils chiffrés pour « presque aussitôt », « rapidement » et le temps de réponse sous charge ? & Qualification des performances.\\
+Q-12 & Quel comportement lorsque le PDF ou l'e-mail échoue ? Quelle tolérance aux doublons d'e-mail ? & Cohérence entre consommation, fichier remis et notification.\\
+Q-13 & Quelle forme de pic à l'intérieur de la première minute et quelle durée d'observation après celle-ci ? & Reproductibilité des essais ; 200 arrivées/s est une moyenne, pas un maximum.\\
+Q-14 & Quels traitements cessent après épuisement et que deviennent les travaux déjà autorisés ? & Interprétation de C6 sans interrompre l'édition ni les autres liens.\\
+Q-15 & Quelles bonnes pratiques précises des autres cours et quel budget de travail faut-il retenir ? & Critères de revue et choix réalisables dans le plan AWS imposé.\\\bottomrule
+\end{longtable}
+
+\textbf{Objectifs de mesure proposés, non validés.} Pour rendre les termes qualitatifs vérifiables, une première discussion peut partir des valeurs ci-dessous. Ces valeurs ne proviennent pas du sujet et ne constituent pas encore des engagements.
+\begin{table}[H]\small
+\begin{tabularx}{\linewidth}{@{}L{48mm}L{34mm}Y@{}}\toprule
+Mesure & Candidat à valider & Conditions à fixer\\\midrule
+Diffusion d'une modification & p95 $\leq 1$ s & Départ à l'acceptation, fin à l'affichage distant ; sous charge définie.\\
+Premier état métier d'une demande & p95 $\leq 2$ s ; max. $\leq 10$ s & Inclut les demandes mises en attente ; ne signifie pas livraison du PDF en 2 s.\\
+Information d'épuisement & p95 $\leq 2$ s & Depuis la dernière consommation ; fixer aussi un maximum pour tous les visiteurs actifs.\\
+Convergence après arrêt des éditions & max. $\leq 5$ s & Échanges disponibles, toutes les opérations acceptées identifiées.\\\bottomrule
+\end{tabularx}
+\caption{Candidats de qualification à négocier ; aucun seuil chiffré de cette table n'est fourni par l'énoncé.}
+\end{table}
+
+Le protocole de charge devra préciser la concentration des clics, la durée du scénario, le nombre d'opérations par rédacteur, leur taille, la taille des documents et leur répartition. Il devra mesurer des rédacteurs réellement actifs, et non seulement 300 connexions ouvertes.
+
+\section{Validation et gestion de la spécification}
+La revue suivra les critères du cours \cite[diapositives 37--39]{cours} : \textbf{validité} des besoins, \textbf{consistance} entre quotas et concurrence, \textbf{complétude} des fonctions demandées, \textbf{réalisme} au regard du délai et du budget, \textbf{vérifiabilité}, \textbf{compréhensibilité}, \textbf{traçabilité} et \textbf{adaptabilité}.
+
+Les points de tension principaux sont la fraîcheur du PDF pendant l'attente, la preuve de conservation des écritures admises lors d'une clôture et l'identité commune face aux quotas multiappareils. Les décisions prises sont détaillées au chapitre 3 ; leurs garanties techniques demandent encore des essais avant de définir l'API et les tests définitifs.
+
+À chaque évolution, les identifiants restent stables ; une exigence modifiée référence la question résolue, sa source et les tests affectés. Les diagrammes PlantUML et le texte sont révisés ensemble. La prochaine partie du cahier pourra alors justifier les choix d'architecture et leurs alternatives à partir de cette base.

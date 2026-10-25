@@ -1,0 +1,42 @@
+@startuml
+!include style.puml
+title Projet et partage — classes conceptuelles
+class "Utilisateur" as User {
+  identité stable
+  e-mail vérifié
+}
+class "Projet" as Project {
+  titre
+  propriétaire
+}
+class "Branche" as Branch {
+  numéro
+  version active
+}
+class "Version métier" as Version {
+  état
+  référence du pad
+}
+class "Permission de branche" as Permission {
+  READ / WRITE
+}
+class "Invitation" as Invite {
+  empreinte du jeton
+  e-mail destinataire
+  droit proposé
+  état
+  état d'envoi
+  expiration
+}
+User "1" <-- "0..*" Project : possède
+Project "1" *-- "1..*" Branch
+Branch "1" *-- "1..*" Version
+Branch "1" -- "0..*" Permission
+Permission "0..*" --> "1" User
+Branch "1" -- "0..*" Invite
+note right of Invite
+PENDING ne donne aucun droit.
+L'acceptation vérifiée crée
+la permission de branche.
+end note
+@enduml

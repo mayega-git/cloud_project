@@ -1,0 +1,25 @@
+@startuml
+!include style.puml
+title Clôture ordonnée et activation du successeur
+actor "Propriétaire ou horloge" as A
+participant "Backend métier" as B
+database "Stockage métier" as D
+participant "Extension d'édition" as E
+participant "Clients" as C
+A -> B : demander la clôture
+B -> D : clôture idempotente, état CLOSING,\néchéance serveur + 3 s
+B -> E : annoncer la fermeture
+E -> C : arrêter les nouvelles saisies
+... échéance d'admission ...
+B -> E : barrière dans la file du pad
+E --> B : dernière révision enregistrée
+B -> D : fixer la révision finale
+B -> E : copier le contenu final
+E --> B : nouveau pad vérifié
+B -> D : FROZEN puis successeur OPEN,\nune seule activation
+B --> A : clôture terminée
+note over B,D
+Une reprise retrouve le même traitement.
+Trois secondes ne bornent pas la copie.
+end note
+@enduml

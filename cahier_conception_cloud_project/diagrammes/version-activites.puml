@@ -1,0 +1,21 @@
+@startuml
+!include style.puml
+title Clôture manuelle ou quotidienne — activité
+start
+:Demande du propriétaire ou échéance quotidienne;
+:Retrouver ou créer la clôture idempotente;
+:Passer la version à CLOSING;\nannoncer l'arrêt des nouvelles saisies;
+:Laisser trois secondes pour l'admission\nsur l'horloge serveur;
+:Fermer l'admission;
+:Attendre la barrière ordonnée\net les opérations déjà admises;
+:Fixer la révision finale;
+if (Copie du pad réussie ?) then (oui)
+  :Vérifier texte et attributs comparables;
+else (non)
+  :Conserver l'opération à reprendre;
+  stop
+endif
+:Figer la source;
+:Créer et activer un seul successeur;
+stop
+@enduml

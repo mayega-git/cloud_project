@@ -1,0 +1,117 @@
+\chapter{Implémentation locale et premiers résultats}
+
+\section{Choix technologiques et compromis de réalisation}
+
+Le tableau couvre le parcours local et les besoins du projet encore à réaliser. « Coût » distingue licence, infrastructure, exploitation, développement et maintenance ; aucun tarif AWS n'est mesuré à cette étape. Les états indiquent ce que le code et les essais de cette livraison permettent réellement d'affirmer.
+
+\begingroup\small
+\begin{longtable}{@{}L{21mm}@{\hspace{1mm}}L{28mm}@{\hspace{1mm}}L{29mm}@{\hspace{1mm}}L{27mm}@{\hspace{1mm}}L{24mm}@{\hspace{1mm}}L{17mm}@{}}
+\caption{Choix technologiques de l'application et compromis.}\label{tab:stack}\\
+\toprule
+Besoin & Choix & Avantages ici & Limites & Coût et délai & État réel \\
+\midrule
+\endfirsthead
+\toprule
+Besoin & Choix & Avantages ici & Limites & Coût et délai & État réel \\
+\midrule
+\endhead
+Édition collaborative & Etherpad 3.3.6 \cite{etherpad-release}. & Moteur de texte et révisions réutilisés. & Règles métier à intégrer ; capacité non mesurée. & Licence à vérifier ; hébergement et maintenance malgré le code ouvert. & Existant vérifié. \\
+\addlinespace
+API métier & Node.js 20, TypeScript 5.9.3, Fastify 5.12.7 \cite{fastify}. & Une seule base de code serveur ; typage et routes légères. & Validation, reprises et charge CPU à surveiller. & Réduit l'intégration ; développement métier nécessaire. & Existant vérifié. \\
+\addlinespace
+Données métier & PostgreSQL 15, migrations et contraintes \cite{postgres-doc}. & Transactions et unicité durables pour droits et traitements. & Sauvegarde et exploitation ; aucune transaction commune avec Etherpad. & Stockage et sauvegardes selon l'hébergement. & Intégré, testé localement. \\
+\addlinespace
+Projets et branches & Table historique \texttt{documents} comme projet, branches et permissions relationnelles. & Préserve les données et l'autorité unique du propriétaire. & Nom ancien à migrer plus tard ; courses à tester. & Pas de service neuf ; tests métier nécessaires. & Intégré. \\
+\addlinespace
+Versions métier & Un pad distinct par version. & Historique isolé ; pas de fusion à développer. & Multiplication des pads et copies ; capacité non démontrée. & Délai favorable, stockage croissant à mesurer. & Intégré, testé localement. \\
+\addlinespace
+Initialisation & Copier contenu final et attributs utiles, sans ancien historique. & V2 démarre de V1 sans dupliquer ses révisions. & Fidélité de tous les attributs et coût d'E/S à qualifier. & Copie et stockage à mesurer. & Texte et HTML testés. \\
+\addlinespace
+Restauration & Nouveau pad et nouvelle branche avec provenance. & Source intacte ; absence de fusion automatique. & Copie supplémentaire et droits à réattribuer. & Moins de logique qu'une fusion ; stockage accru. & Intégrée, testée. \\
+\addlinespace
+Gel & Plugin client/serveur et patch ciblé d'Etherpad 3.3.6. & Admission et barrière dans la file du pad ; retour visuel. & Maintenance du patch et fautes en transit à qualifier. & Principal risque de tests et de maintenance. & Parcours local testé ; C2 ouverte. \\
+\addlinespace
+Clôture quotidienne & Worker backend, échéances persistées et fuseau IANA. & Pas de minuteur par document ; reprise idempotente. & Courses multi-instance et pics de clôture à mesurer. & Pas de plateforme supplémentaire ; tests de panne requis. & Intégrée, partiellement testée. \\
+\addlinespace
+Identité vérifiée & Better Auth 1.7.13 avec Email OTP et PostgreSQL \cite{better-auth-otp,better-auth-fastify,better-auth-postgres}. & Réutilise une solution maintenue ; sessions et preuve d'adresse. & Dépend du relais e-mail ; l'adaptateur ancien reste local. & Intégration et e-mails ; pas de tarif affirmé. & Intégrée et testée localement. \\
+\addlinespace
+Invitations & Jeton haché, table métier et permission de branche. & Aucun service d'autorisation ajouté ; acceptation explicite. & Échec d'envoi, expiration et révocation à surveiller. & Faible infrastructure ; effort de sécurité et de tests. & Intégrées, testées localement. \\
+\addlinespace
+E-mails & Nodemailer 10.2.1 et SMTP configurable ; boîte mémoire locale \cite{nodemailer-doc}. & Aucun destinataire réel en test ; fournisseur interchangeable. & Boîte locale non durable ; SMTP peut retarder ou dupliquer. & Transport et exploitation variables selon fournisseur. & Local testé ; SMTP externe non testé. \\
+\addlinespace
+Crédit d'écriture & Contrôle serveur commun aux sessions, à concevoir. & Navigateur non autoritaire. & Débit et révision dans deux systèmes ; atomicité à démontrer. & Effort de conception et d'essais élevé. & Prévu, non implémenté. \\
+\addlinespace
+Récupération & Copie locale volontaire et téléchargement du texte. & Pas de fusion automatique. & Peut contenir tout le document ; confidentialité locale. & Faible coût serveur ; tests de reconnexion restants. & Parcours local vérifié. \\
+\addlinespace
+Interface & Page HTML/JavaScript légère et éditeur Etherpad. & Un parcours minimal sans second framework. & Ergonomie et accessibilité à approfondir. & Délai réduit ; maintenance du client. & Intégrée, contrôle visuel. \\
+\addlinespace
+Déploiement local & Compose, PostgreSQL, backend, Etherpad et passerelle. & Démarrage reproductible. & Ne prouve pas la haute disponibilité. & Ressources de la machine ; exploitation cible à définir. & Vérifié localement. \\
+\addlinespace
+Validation et observabilité & Tests Node, PostgreSQL et Etherpad ; journaux existants. & Éprouve des courses et les droits réels. & Fautes, charge et métriques non couvertes. & Temps d'exécution et maintenance des tests. & Partiel. \\
+\addlinespace
+Sauvegarde et AWS & Sauvegarde, supervision et services AWS à déterminer. & Respect possible de la région et de S3. & Aucune architecture ou restauration testée. & Coût de stockage et d'exploitation à estimer. & Prévu. \\
+\addlinespace
+Rapport & LaTeX et PlantUML. & Sources modifiables et génération reproductible. & Dépendances et inspection visuelle nécessaires. & Temps de compilation et relecture. & Existant vérifié. \\
+\bottomrule
+\end{longtable}
+\endgroup
+
+Un pad par version simplifie l'intégration à Etherpad dans ce périmètre sans fusion, mais ne constitue aucune preuve de capacité. Il faudra mesurer le nombre de pads actifs, les révisions, le stockage et les clôtures simultanées. Git n'est pas introduit : le besoin n'inclut ni fusion ni rebase, et sa synchronisation avec les pads ajouterait un second état à maintenir. Il ne remplacerait ni les droits ni la barrière de gel ; cette décision ne suppose aucune infériorité intrinsèque de performance de Git. Réutiliser la stack limite les nouvelles intégrations, l'apprentissage et l'exploitation, sans rendre gratuits les licences, l'hébergement, les sauvegardes ou la maintenance.
+
+\section{Organisation et interfaces de cette étape}
+
+Le code contient maintenant un backend Fastify, des migrations pour le schéma métier \texttt{business} de PostgreSQL, un plugin \texttt{ep\_business} et une image Etherpad 3.3.6 construite localement. Les anciennes données de pads demeurent intactes, mais le nouveau parcours métier ne donne pas accès aux pads sans version enregistrée. Les sessions historiques de développement utilisent un cookie opaque et un hachage persistant avec adresse déclarée. Leur création reste limitée au mode local. Le nouveau parcours vérifie l'adresse par code e-mail avec Better Auth ; une session métier vérifiée conserve l'identifiant utilisateur stable, y compris pour une adresse déjà connue. Les autorisations restent dans le backend.
+
+\texttt{POST /projects} crée le projet d'édition (représenté par la table historique 	exttt{documents}), sa première branche, sa version ouverte et son pad. Les routes de lecture exposent les branches, les versions et le contenu d'une révision autorisée. Le propriétaire vérifié peut inviter une adresse encore inconnue, renvoyer ou annuler le lien, puis modifier ou révoquer un droit après acceptation. Une invitation en attente ne donne aucun accès. Le jeton n'est conservé dans la table que sous forme d'empreinte ; le fragment du lien n'est pas envoyé dans l'URL des requêtes HTTP. \texttt{POST /branches/:id/closures} et \texttt{POST /versions/:id/restorations} retournent un identifiant de traitement et le statut HTTP 202 ; les routes de suivi distinguent traitement en cours et résultat terminé. Une clé d'idempotence est exigée pour ces créations. Le contrat d'API complet reste à rédiger.
+
+La passerelle locale réserve les API administratives Etherpad aux composants internes. Le plugin consulte le backend pour les connexions et les messages d'écriture ; connaître l'identifiant du pad ne suffit pas pour y accéder par le navigateur. Le code et les commandes de construction sont décrits dans \texttt{application/README.md}. Les visiteurs de PDF n'utilisent pas l'éditeur.
+
+\subsection{Points techniques à vérifier pour le crédit}
+
+Le modèle du chapitre 3 compte les points de code Unicode. Il faut distinguer, dans l'implémentation, les octets, les unités UTF-16, les points de code et les graphèmes visibles : \texttt{String.length} compte des unités UTF-16 et ne mesure donc pas directement le crédit. Le décodage des changements d'Etherpad devra isoler le texte réellement inséré des éléments techniques. Il faudra aussi vérifier toute conversion des fins de ligne CRLF/LF avant le calcul, sans changer silencieusement le texte ou les positions d'écriture.
+
+La correspondance entre l'identifiant stable de l'utilisateur (\texttt{user\_id}), ses sessions et l'identifiant d'auteur d'Etherpad (\texttt{authorId}) reste à établir pour plusieurs connexions. Les hooks d'Etherpad, la persistance et l'ordre des acquittements devront être étudiés avant de placer le refus et la confirmation d'une écriture \cite{etherpad-hooks}. PostgreSQL, Valkey et \texttt{rate-limiter-flexible} sont des candidats pour certaines règles de crédit ou de protection contre les abus, sans assemblage validé. Un appel \texttt{consume()} suivi d'une sauvegarde ne résout pas l'atomicité entre débit et écriture.
+
+\section{Correspondance entre conception et code}\label{sec:implementation-historique}
+
+Une branche et ses permissions sont des données métier. Chaque version utilise un pad Etherpad distinct ; ses révisions techniques restent dans ce pad. Le passage à V2 copie le contenu final de V1 sans recopier son historique. Pour restaurer une révision antérieure, le service copie d'abord le pad source avec son historique vers un pad temporaire, applique \texttt{restoreRevision} à cette \emph{copie}, puis crée le pad définitif de la nouvelle branche. Le pad source reste intact. La comparaison du texte et du HTML a été testée sur une révision avec gras et italique ; elle ne prouve pas encore la fidélité de tous les attributs possibles.
+
+\begingroup\small
+\begin{longtable}{@{}L{29mm}@{\hspace{1.5mm}}L{36mm}@{\hspace{1.5mm}}L{38mm}@{\hspace{1.5mm}}L{25mm}@{\hspace{1.5mm}}L{23mm}@{}}
+\caption{Mécanismes implémentés et preuves restantes.}\label{tab:correspondance-historique}\\
+\toprule
+Mécanisme & Support Etherpad 3.3.6 & Adaptation locale & État & Preuve restante \\
+\midrule
+\endfirsthead
+\toprule
+Mécanisme & Support Etherpad 3.3.6 & Adaptation locale & État & Preuve restante \\
+\midrule
+\endhead
+Branches et versions & Pads et révisions \cite{etherpad-api}. & Tables métier, contraintes d'unicité, copie du pad final. & Intégré ; essai V1 vers V2 réussi. & Reprises aux pannes injectées. \\
+\addlinespace
+Historique et restauration & Lecture de révision ; \texttt{restoreRevision} écrit dans le pad appelé \cite{etherpad-api-code-336}. & Copie temporaire, restauration sur cette copie, pad indépendant et provenance. & Essai réel avec HTML réussi. & Attributs complexes et gros historique. \\
+\addlinespace
+Permissions & Connexion et messages contrôlables par plugin \cite{etherpad-hooks}. & Session métier, droit de branche, état de version et passerelle API. & Accès et révocation vérifiés localement. & Session longue et déploiement public. \\
+\addlinespace
+Clôture & File par pad et acquittement après révision \cite{etherpad-handler-336}. & Patch versionné : admission et barrière dans la file ; délai de trois secondes. & Passage à V2 et annonce client observés. & Écritures en vol, pannes et concurrence de plusieurs instances. \\
+\addlinespace
+Échéance quotidienne & Aucune règle métier native. & Worker central et calcul par fuseau IANA. & Test réel d'échéance dépassée ; tests de changements d'heure. & Arrêt/reprise pendant une clôture. \\
+\addlinespace
+Crédit et invitations & Aucun couplage transactionnel avec le quota. & OTP et invitations intégrés ; autorisation de crédit à compléter. & OTP testé ; quota absent. & C4 et atomicité. \\
+\bottomrule
+\end{longtable}
+\endgroup
+
+Une modification \emph{reçue} arrive au serveur. Elle est \emph{admise} si la décision prise dans la file du pad, avec l'horloge du serveur, autorise encore l'écriture. Elle est \emph{enregistrée} quand Etherpad ajoute sa révision, puis \emph{acquittée} quand le client reçoit \texttt{ACCEPT\_COMMIT}. Le patch ajoute la décision et la barrière dans cette file ; un simple hook \texttt{handleMessage} avant la file n'aurait pas suffi. Les trois secondes bornent l'admission, non l'achèvement de la copie ou de la transaction métier.
+
+Le client désactive l'édition après annonce de fermeture et garde une copie du texte local. Après rechargement, cette copie demeure consultable dans le navigateur. Elle peut contenir des contributions déjà enregistrées ; elle n'est pas le delta exact refusé et n'est pas réinsérée automatiquement. Une coupure n'est pas détectée instantanément, et un test de reconnexion après longue coupure reste nécessaire. Les droits et l'état de la version sont revérifiés côté serveur au prochain message. Le débit du crédit et l'enregistrement de la révision ne forment toujours pas une transaction commune.
+
+\section{Déploiement local et vérifications}
+
+L'environnement local comprend PostgreSQL 15, Etherpad 3.3.6, le backend et une passerelle Nginx. Le script de préparation génère des secrets hors Git ; les migrations précèdent le démarrage du backend. Les commandes figurent dans \texttt{application/README.md}. Lors de cette livraison, la compilation TypeScript, les tests de calendrier et les tests d'intégration contre les conteneurs ont été exécutés ; les résultats précis et leur date figurent dans \texttt{VALIDATION.md}. Les validations antérieures y restent distinguées.
+
+\section{Limites et infrastructure cible}
+
+Les branches, versions, permissions, clôtures, restaurations, sessions vérifiées et invitations e-mail sont codées ; leur qualification reste partielle. Le contrôle du crédit, les liens limités, les PDF, les notifications du dernier téléchargement et la supervision ne sont pas implémentés. La copie initiale d'une version n'est pas facturée dans ce code, sans fixer encore la règle métier définitive. Aucun essai de 300 rédacteurs ou de 15\,000 visiteurs n'a été exécuté. La garantie C2 exige encore des essais sur les écritures simultanées, en transit et lors des pannes ; C4 n'est pas satisfaite.
+
+La cible demeure le compte AWS du porteur, dans une région, avec les PDF conservés dans S3, sans clés AWS dans le dépôt et avec des permissions minimales \cite{sujet}. Aucun service AWS supplémentaire ni coût n'est présenté comme validé ; aucune ressource AWS n'est déployée ici.

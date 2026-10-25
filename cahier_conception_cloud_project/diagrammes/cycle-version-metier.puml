@@ -1,0 +1,24 @@
+@startuml
+!pragma layout smetana
+!include style.puml
+top to bottom direction
+
+state "OUVERTE" as OUVERTE
+state "FERMETURE" as FERMETURE
+state "FIGÉE" as FIGEE
+
+[*] --> OUVERTE : activation
+OUVERTE --> FERMETURE : gel manuel ou échéance
+FERMETURE --> FIGEE : révision finale fixée
+FIGEE --> [*]
+
+note right of FERMETURE
+  Admission jusqu'à l'échéance : 3 secondes.
+  Résolution des opérations admises ensuite.
+end note
+
+note right of FIGEE
+  La version suivante est un objet distinct.
+  Son activation suit la clôture.
+end note
+@enduml

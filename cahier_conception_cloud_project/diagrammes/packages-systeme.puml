@@ -1,0 +1,35 @@
+@startuml
+!pragma layout smetana
+!include style.puml
+left to right direction
+
+package "Éditeur collaboratif" as EDIT {
+  component "Édition partagée, présence\net révisions techniques" as EDITEUR
+  component "Contrôle de l'édition\n(gel et crédit)" as CONTROLE
+  component "Interface : gel visible\net récupération locale" as INTERFACE
+}
+
+package "Backend métier" as METIER {
+  component "Identité, sessions\net permissions" as IDENTITE
+  component "Branches, versions,\nclôtures et crédit" as BACKEND
+  component "Liens et supervision" as LIENS
+}
+
+package "Relais e-mail" as MAIL {
+  component "Codes de vérification\net notifications" as ENVOI
+}
+
+package "Module de stockage" as STOCK {
+  component "États métier, permissions,\nprovenance et échéances" as DONNEES
+  component "Textes et révisions\n(références métier)" as REFERENCES
+  component "PDF distribués" as PDF
+}
+
+BACKEND ..> EDITEUR : gestion des documents
+CONTROLE ..> BACKEND : règles d'admission
+EDITEUR ..> REFERENCES : textes et révisions
+BACKEND ..> DONNEES : état métier
+BACKEND ..> PDF : PDF distribués
+IDENTITE ..> ENVOI : codes de vérification
+LIENS ..> ENVOI : avis d'épuisement
+@enduml

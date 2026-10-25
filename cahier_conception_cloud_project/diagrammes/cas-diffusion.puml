@@ -1,0 +1,20 @@
+@startuml
+!pragma layout smetana
+!include style.puml
+left to right direction
+actor "Rédacteur\ncréateur du lien" as R
+actor "Visiteur anonyme" as V
+actor "Responsable\nde l'association" as A
+rectangle "Éditeur collaboratif : diffusion et suivi" {
+ usecase "Créer un lien limité\nEF-12, EF-13" as U1
+ usecase "Télécharger le PDF actuel\nEF-14 à EF-16, EF-18" as U2
+ usecase "Connaître l'état de sa demande\nEF-17, EF-19 à EF-21" as U3
+ usecase "Être prévenu de l'épuisement\nEF-22" as U4
+ usecase "Consulter l'état de l'application\nEF-30 à EF-33" as U5
+}
+R -- U1
+R -- U4
+V -- U2
+V -- U3
+A -- U5
+@enduml

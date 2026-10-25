@@ -1,0 +1,19 @@
+@startuml
+!pragma layout smetana
+!include style.puml
+left to right direction
+
+actor "Rédacteur" as R
+actor "Visiteur anonyme" as V
+actor "Responsable\nde l'association" as A
+rectangle "Relais d'e-mail\n(externe)" as M
+rectangle "Stockage externe\ndes PDF" as STOCKAGE
+
+rectangle "Système" as SYS
+
+R -- SYS : documents
+V -- SYS : PDF
+A -- SYS : état
+SYS --> STOCKAGE : stocker et lire\nles PDF
+SYS --> M : transmettre l'avis\nd'épuisement
+@enduml

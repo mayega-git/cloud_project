@@ -1,0 +1,27 @@
+@startuml
+!include style.puml
+title Invitation et acceptation — activité
+start
+:Le propriétaire choisit branche,\ne-mail et READ ou WRITE;
+:Enregistrer jeton haché,\nexpiration et état PENDING;
+:Envoyer le lien par e-mail;
+if (Envoi réussi ?) then (oui)
+  :Marquer SENT;
+else (non)
+  :Marquer FAILED;\npermettre un renvoi explicite;
+endif
+:Le destinataire ouvre le lien;
+if (Révoquée ou expirée ?) then (oui)
+  :Refuser;
+  stop
+endif
+:Vérifier l'adresse par code e-mail;
+if (Même adresse vérifiée ?) then (oui)
+  :Demander une acceptation explicite;
+  :Créer ou modifier la permission\nsous verrou transactionnel;
+  :Marquer ACCEPTED;
+else (non)
+  :Refuser sans permission;
+endif
+stop
+@enduml

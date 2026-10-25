@@ -1,0 +1,25 @@
+@startuml
+!pragma layout smetana
+!include style.puml
+top to bottom direction
+component "Éditeur navigateur" as browser
+package "Overleaf sur site : services du conteneur applicatif" {
+ component "web\nAPI" as web
+ component "real-time\nSockets" as rt
+ component "document-updater\nModifications" as du
+ component "docstore\nDocuments" as ds
+ component "clsi\nCompilation PDF" as clsi
+ component "filestore\nFichiers binaires" as fs
+}
+database "Redis\nÉtat actif" as redis
+database "MongoDB\nDocuments" as mongo
+browser --> web : requêtes / compilation
+browser --> rt : WebSocket
+rt --> du : mises à jour
+du --> redis : lecture / écriture
+du --> web : accès aux documents
+web --> ds
+ds --> mongo
+web --> clsi : compiler
+clsi --> fs : lire les fichiers
+@enduml

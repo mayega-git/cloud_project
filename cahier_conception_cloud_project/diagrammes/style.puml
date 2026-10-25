@@ -1,0 +1,8 @@
+skinparam monochrome true
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam defaultFontName SansSerif
+skinparam defaultFontSize 15
+skinparam dpi 180
+skinparam roundcorner 0
+skinparam sequenceMessageAlign center

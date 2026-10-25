@@ -1,0 +1,22 @@
+@startuml
+!include style.puml
+hide footbox
+actor "Visiteur" as V
+participant "Application\n(boîte noire)" as S
+actor "Créateur du lien" as C
+V -> S : Utiliser le lien
+alt Lien déjà épuisé
+ S --> V : Indiquer l'épuisement
+else Demande mise en attente
+ S --> V : Indiquer l'attente
+ note over V,S : Suite non représentée : réévaluer jusqu'à autorisation ou épuisement\nAucun visiteur ne doit rester sans issue définie
+else Distribution autorisée
+ S -> S : Appliquer le plafond exact\nProduire un PDF cohérent et actuel
+ S --> V : Fournir le PDF
+ opt Dernier téléchargement autorisé
+  S --> C : Prévenir par e-mail
+  note over V,S : Informer aussi les autres visiteurs encore présents de l'épuisement
+ end
+end
+note over V,S : Événement comptabilisé et instant de capture : Q-01, Q-03
+@enduml

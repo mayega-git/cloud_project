@@ -1,0 +1,26 @@
+@startuml
+!include style.puml
+title Crédit et écriture — activité cible
+start
+:Recevoir une opération identifiée;
+:Vérifier identité, droit de branche,\nversion active et échéance;
+if (Autorisé ?) then (oui)
+  :Calculer les points de code insérés;
+  :Consulter le crédit du rédacteur\npour sa journée UTC;
+  if (Crédit suffisant ?) then (oui)
+    :Admettre sous contrôle serveur;
+    :Traiter et enregistrer la révision;
+    if (Enregistrement confirmé ?) then (oui)
+      :Réconcilier le débit unique\net l'écriture durable;
+      :Acquitter seulement après preuve;
+    else (non)
+      :Reprendre ou refuser explicitement\nsans débit définitif indu;
+    endif
+  else (non)
+    :Refuser l'opération entière;
+  endif
+else (non)
+  :Refuser l'opération;
+endif
+stop
+@enduml
