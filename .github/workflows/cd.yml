@@ -1,0 +1,56 @@
+name: Publish images
+
+# Manual only: never runs on push or pull request, so a publish is always a
+# deliberate action. No AWS access and no deployment; images go to GHCR using
+# the workflow's own GITHUB_TOKEN.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-images
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # Only publish what is on main.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: backend
+            dockerfile: application/deployment/Dockerfile.backend
+          - image: etherpad
+            dockerfile: application/deployment/Dockerfile.etherpad
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Tagged with the full commit SHA; the digest is printed so deployments
+      # can pin it. There is deliberately no "latest" tag.
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: application
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ghcr.io/${{ github.repository }}/${{ matrix.image }}:${{ github.sha }}
+
+      - name: Summary
+        run: |
+          echo "ghcr.io/${{ github.repository }}/${{ matrix.image }}:${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "digest: ${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
