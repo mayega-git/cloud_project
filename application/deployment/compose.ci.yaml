@@ -1,0 +1,9 @@
+# CI override: no published host ports, so a CI run never collides with a
+# local development stack. Containers reach each other on the Compose network.
+services:
+  postgres:
+    ports: !reset []
+  backend:
+    ports: !reset []
+  gateway:
+    ports: !reset []

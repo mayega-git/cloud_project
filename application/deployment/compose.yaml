@@ -46,8 +46,8 @@ services:
       UPDATES_TIER: "off"
       TRUST_PROXY: "false"
     volumes:
-      - ../.secrets/APIKEY.txt:/opt/etherpad-lite/APIKEY.txt:ro
-      - ../.secrets/INTERNAL_KEY.txt:/run/business/INTERNAL_KEY.txt:ro
+      - ${SECRETS_DIR:-../.secrets}/APIKEY.txt:/opt/etherpad-lite/APIKEY.txt:ro
+      - ${SECRETS_DIR:-../.secrets}/INTERNAL_KEY.txt:/run/business/INTERNAL_KEY.txt:ro
       - etherpad_var:/opt/etherpad-lite/var
 
   backend:
@@ -78,9 +78,9 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
-      - ../.secrets/APIKEY.txt:/run/business/APIKEY.txt:ro
-      - ../.secrets/INTERNAL_KEY.txt:/run/business/INTERNAL_KEY.txt:ro
-      - ../.secrets/BETTER_AUTH_SECRET.txt:/run/business/BETTER_AUTH_SECRET.txt:ro
+      - ${SECRETS_DIR:-../.secrets}/APIKEY.txt:/run/business/APIKEY.txt:ro
+      - ${SECRETS_DIR:-../.secrets}/INTERNAL_KEY.txt:/run/business/INTERNAL_KEY.txt:ro
+      - ${SECRETS_DIR:-../.secrets}/BETTER_AUTH_SECRET.txt:/run/business/BETTER_AUTH_SECRET.txt:ro
 
   gateway:
     image: nginx:1.27-alpine

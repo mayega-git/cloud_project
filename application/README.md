@@ -1,6 +1,6 @@
 # Application locale : branches et versions métier
 
-Ce MVP utilise Etherpad 3.3.6, PostgreSQL 15, un backend TypeScript/Fastify et un plugin Etherpad local. Il crée des branches et des versions métier, ferme une version manuellement ou à la fin de la journée du propriétaire, et restaure une révision vers une branche indépendante. Le quota, l'OTP, les PDF et AWS restent à développer.
+Ce MVP utilise Etherpad 3.3.6, PostgreSQL 15, un backend TypeScript/Fastify et un plugin Etherpad local. Il crée des branches et des versions métier, ferme une version manuellement ou à la fin de la journée du propriétaire, et restaure une révision vers une branche indépendante. La vérification de l'adresse par code à usage unique (OTP e-mail, Better Auth) et le partage par invitation de branche sont intégrés en local. Le quota, les PDF, les liens de téléchargement limités, les notifications et AWS restent à développer.
 
 ## Démarrer
 
@@ -41,9 +41,16 @@ await fetch('/dev/sessions', {method: 'POST', headers: {'content-type': 'applica
 
 Ouvrir ensuite `editorUrl`. Le cookie créé par `curl` n'est pas partagé avec le navigateur. Un accès direct au pad sans session autorisée échoue. Pour attribuer un droit local à un autre rédacteur, créer sa session puis appeler `PUT /branches/{branchId}/permissions/{userId}` avec `{"access":"READ"}` ou `{"access":"WRITE"}`.
 
+## Vérification d'adresse et invitations
+
+- Better Auth 1.7.13 (Email OTP, adaptateur PostgreSQL) répond sous `/api/auth/*`. Une fois l'adresse vérifiée, `POST /auth/complete` crée la session métier (cookie opaque). La configuration est dans `backend/src/better-auth.ts`.
+- `GET /app` sert une interface locale de base (`backend/public/app.html`). Seul son rendu de base a été observé ; elle n'est pas validée de bout en bout dans un navigateur.
+- En mode local (`APP_ENV=local`), les messages ne sont pas envoyés : ils restent dans une boîte mémoire lisible via `GET /dev/mailbox?email=...` avec l'en-tête `x-internal-key`. Ils disparaissent au redémarrage. Un SMTP (`SMTP_*`) n'est pas vérifié, et l'envoi n'est ni une file durable ni exactement-une-fois.
+- Le propriétaire invite une adresse, même inconnue, avec un droit `READ` ou `WRITE` sur une branche. Le destinataire vérifie la même adresse puis accepte explicitement : ouvrir le lien n'accorde aucun droit. Renvoyer invalide l'ancien lien ; expiration ou révocation interdit l'acceptation. Seul le propriétaire invite.
+
 ## Interfaces disponibles
 
-Toutes les routes métier exigent le cookie, sauf `/health` et `/dev/sessions`. Les créations exigent `Idempotency-Key` (8 à 128 caractères). Les erreurs JSON utilisent `error.code` et `error.message` en anglais.
+Toutes les routes métier exigent le cookie, sauf `/health`, `/dev/sessions`, `/api/auth/*`, `/auth/complete` (session Better Auth requise) et `/app`. Les créations exigent `Idempotency-Key` (8 à 128 caractères). Les erreurs JSON utilisent `error.code` et `error.message` en anglais.
 
 | Requête | Effet |
 |---|---|
@@ -56,6 +63,17 @@ Toutes les routes métier exigent le cookie, sauf `/health` et `/dev/sessions`. 
 | `GET /closures/{operationId}` | Suivre la clôture et retrouver le successeur. |
 | `POST /versions/{id}/restorations` | Restaurer `{"revision": n}` vers une nouvelle branche. |
 | `GET /restorations/{operationId}` | Suivre la restauration et retrouver la nouvelle branche. |
+
+Routes de projet et de partage (corps exacts dans `backend/src/server.ts`) :
+
+| Requête | Effet |
+|---|---|
+| `POST /projects`, `GET /projects`, `GET /projects/{id}`, `GET /projects/{id}/branches` | Créer (adresse vérifiée exigée) et consulter les projets. |
+| `POST /branches/{id}/invitations` | Inviter `{"email", "access": "READ"\|"WRITE"}`, avec `Idempotency-Key`. |
+| `GET /branches/{id}/invitations`, `GET /branches/{id}/collaborators` | Lister invitations et collaborateurs. |
+| `PUT/DELETE /branches/{id}/collaborators/{userId}` | Modifier ou retirer un droit. |
+| `POST /invitations/{id}/resend`, `DELETE /invitations/{id}` | Renvoyer (ancien lien invalidé) ou révoquer. |
+| `POST /invitations/preview`, `POST /invitations/accept` | Aperçu puis acceptation explicite avec `{"token"}`. |
 
 Les deux demandes longues retournent `202` et un `operationId` : la clôture ou la restauration n'est pas encore terminée. Le worker reprend les traitements après redémarrage. Il recherche les échéances quotidiennes toutes les secondes ; la journée suit le fuseau IANA déclaré à la création et peut durer 23 ou 25 heures. Après plusieurs jours d'arrêt, une seule transition est lancée par branche. À titre provisoire, elle est effectuée même sans modification, et le fuseau n'est pas modifiable.
 
@@ -72,11 +90,15 @@ Le quota de 10 000 caractères est **non implémenté**. La copie structurelle n
 
 ## Vérifier
 
+Le chemin reproductible est `bash ci-local.sh` (installation verrouillée, build, tests unitaires, validation Compose, construction des images, migrations rejouées, tests d'intégration sur une pile jetable de projet `ci-local`). Options : `--skip-docker`, `--keep`, `--no-build` (réutilise les images locales), `--local-db` (utilise le PostgreSQL de développement déjà démarré, dans une base `ci_test` créée puis supprimée). Le même script est exécuté par `.github/workflows/ci.yml` sur les pull requests, sans secret ni déploiement.
+
+Pas à pas :
+
 ```sh
 cd backend && npm run build && npm test && cd ..
 docker compose --env-file .env -f deployment/compose.yaml run --rm --no-deps \
   -e RUN_INTEGRATION=1 -e BUSINESS_BASE_URL=http://backend:3000 \
-  backend node --test dist/domain/business.integration.test.js
+  backend node --test dist/domain/business.integration.test.js dist/domain/invitation.integration.test.js
 docker compose --env-file .env -f deployment/compose.yaml logs --tail=100 etherpad backend
 ```
 
