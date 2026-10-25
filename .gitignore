@@ -5,3 +5,4 @@ application/.env
 application/.secrets/
 application/backend/node_modules/
 application/backend/dist/
+introduction-aws.pdf

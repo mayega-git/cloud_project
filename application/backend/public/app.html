@@ -122,7 +122,8 @@
       for (const version of versions) {
         const row = item($('versions'), `V${version.number} — ${version.state} `);
         const link = document.createElement('a');
-        link.href = `http://127.0.0.1:9001/p/${encodeURIComponent(version.padId)}`;
+        // The editor gateway listens on port 9001 of the same host as the application.
+        link.href = `${location.protocol}//${location.hostname}:9001/p/${encodeURIComponent(version.padId)}`;
         link.textContent = 'Ouvrir';
         row.appendChild(link);
       }
