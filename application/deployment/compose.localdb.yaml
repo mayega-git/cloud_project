@@ -1,0 +1,17 @@
+# CI override: use an already running PostgreSQL (the development one) instead
+# of starting a new one. ci-local.sh connects that container to the CI network
+# under the alias "ci-devdb" and creates/drops the dedicated database ci_test.
+# The alias is unique on purpose: service names such as "etherpad" and
+# "backend" also exist in the development stack and must never be shared.
+services:
+  postgres:
+    profiles: ["unused"]
+  etherpad:
+    depends_on: !reset {}
+    environment:
+      DB_HOST: ci-devdb
+      DB_NAME: ci_test
+  backend:
+    depends_on: !reset {}
+    environment:
+      DATABASE_URL: postgresql://etherpad:${POSTGRES_PASSWORD}@ci-devdb:5432/ci_test
