@@ -1,0 +1,10 @@
+FROM node:20-alpine
+WORKDIR /app/backend
+COPY backend/package.json backend/package-lock.json ./
+RUN npm ci
+COPY backend/tsconfig.json ./
+COPY backend/migrations ./migrations
+COPY backend/public ./public
+COPY backend/src ./src
+RUN npm run build
+CMD ["node", "dist/server.js"]

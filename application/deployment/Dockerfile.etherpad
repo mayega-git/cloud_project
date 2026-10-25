@@ -1,0 +1,12 @@
+FROM etherpad/etherpad:3.3.6
+USER root
+RUN apk add --no-cache python3
+COPY plugins/patch-etherpad.py /tmp/patch-etherpad.py
+RUN python3 /tmp/patch-etherpad.py
+COPY plugins/ep_business /opt/etherpad-lite/local_plugins/ep_business
+RUN chown -R etherpad:etherpad /opt/etherpad-lite/local_plugins/ep_business
+USER etherpad
+ENV ETHERPAD_LOCAL_PLUGINS=ep_business
+RUN bin/installLocalPlugins.sh
+RUN pnpm run plugins i --path /opt/etherpad-lite/local_plugins/ep_business
+CMD ["sh", "-c", "if ! grep -q '\"name\":\"ep_business\",\"version\":\"0.1.8\"' var/installed_plugins.json 2>/dev/null; then pnpm run plugins i --path /opt/etherpad-lite/local_plugins/ep_business; fi; cd src && exec node --require tsx/cjs node/server.ts"]

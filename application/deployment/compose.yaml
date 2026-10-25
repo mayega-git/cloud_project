@@ -1,0 +1,96 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: etherpad
+      POSTGRES_USER: etherpad
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run application/setup-local.sh}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U etherpad -d etherpad"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  etherpad:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.etherpad
+    image: cloud-project-etherpad:3.3.6-business
+    user: "0:0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DB_TYPE: postgres
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: etherpad
+      DB_USER: etherpad
+      DB_PASS: ${POSTGRES_PASSWORD:?Run application/setup-local.sh}
+      AUTHENTICATION_METHOD: apikey
+      REQUIRE_AUTHENTICATION: "true"
+      REQUIRE_AUTHORIZATION: "true"
+      BUSINESS_BACKEND_URL: http://backend:3000
+      INTERNAL_KEY_FILE: /run/business/INTERNAL_KEY.txt
+      ADMIN_PASSWORD: ${ETHERPAD_ADMIN_PASSWORD:?Run application/setup-local.sh}
+      EDIT_ONLY: "true"
+      SHOW_RECENT_PADS: "false"
+      DEFAULT_PAD_TEXT: " "
+      PRIVACY_UPDATE_CHECK: "false"
+      PRIVACY_PLUGIN_CATALOG: "false"
+      UPDATES_TIER: "off"
+      TRUST_PROXY: "false"
+    volumes:
+      - ../.secrets/APIKEY.txt:/opt/etherpad-lite/APIKEY.txt:ro
+      - ../.secrets/INTERNAL_KEY.txt:/run/business/INTERNAL_KEY.txt:ro
+      - etherpad_var:/opt/etherpad-lite/var
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile.backend
+    image: cloud-project-backend:local
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3000"
+      APP_ENV: local
+      DATABASE_URL: postgresql://etherpad:${POSTGRES_PASSWORD}@postgres:5432/etherpad
+      ETHERPAD_API_URL: http://etherpad:9001
+      ETHERPAD_PUBLIC_URL: http://127.0.0.1:9001
+      ETHERPAD_API_KEY_FILE: /run/business/APIKEY.txt
+      INTERNAL_KEY_FILE: /run/business/INTERNAL_KEY.txt
+      BETTER_AUTH_SECRET_FILE: /run/business/BETTER_AUTH_SECRET.txt
+      AUTH_BASE_URL: http://127.0.0.1:3000
+      INVITATION_LIFETIME_DAYS: ${INVITATION_LIFETIME_DAYS:-7}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ../.secrets/APIKEY.txt:/run/business/APIKEY.txt:ro
+      - ../.secrets/INTERNAL_KEY.txt:/run/business/INTERNAL_KEY.txt:ro
+      - ../.secrets/BETTER_AUTH_SECRET.txt:/run/business/BETTER_AUTH_SECRET.txt:ro
+
+  gateway:
+    image: nginx:1.27-alpine
+    depends_on:
+      - etherpad
+    ports:
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+
+volumes:
+  postgres_data:
+  etherpad_var:

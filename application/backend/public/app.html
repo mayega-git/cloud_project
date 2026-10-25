@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Projets d’édition</title>
+  <style>
+    body{font:16px system-ui,sans-serif;max-width:850px;margin:2rem auto;padding:0 1rem;color:#111}
+    section{border:1px solid #777;padding:1rem;margin:1rem 0}
+    label{display:block;margin:.5rem 0}
+    input,select,button{font:inherit;padding:.35rem;margin:.2rem}
+    button{cursor:pointer}
+    #message{white-space:pre-wrap}
+    li{margin:.5rem 0}
+  </style>
+</head>
+<body>
+  <h1>Projets d’édition</h1>
+  <p id="message" role="status"></p>
+  <section>
+    <h2>Identité vérifiée</h2>
+    <label>Nom <input id="name" autocomplete="name"></label>
+    <label>Adresse e-mail <input id="email" type="email" autocomplete="email"></label>
+    <button id="sendOtp">Recevoir un code</button>
+    <label>Code reçu <input id="otp" inputmode="numeric"></label>
+    <button id="verifyOtp">Vérifier et ouvrir la session</button>
+  </section>
+  <section>
+    <h2>Créer un projet</h2>
+    <label>Titre <input id="projectTitle"></label>
+    <label>Fuseau IANA <input id="timeZone" value="Africa/Abidjan"></label>
+    <button id="createProject">Créer</button>
+  </section>
+  <section>
+    <h2>Mes projets et branches accessibles</h2>
+    <button id="refreshProjects">Actualiser</button>
+    <ul id="projects"></ul>
+  </section>
+  <section id="branchPanel" hidden>
+    <h2>Branche sélectionnée</h2>
+    <p id="branchInfo"></p>
+    <ul id="versions"></ul>
+    <div id="ownerPanel" hidden>
+      <h3>Inviter un collaborateur</h3>
+      <label>Adresse e-mail <input id="inviteEmail" type="email"></label>
+      <label>Droit <select id="inviteAccess"><option>READ</option><option>WRITE</option></select></label>
+      <button id="invite">Envoyer l’invitation</button>
+      <h3>Invitations</h3><ul id="invitations"></ul>
+      <h3>Collaborateurs</h3><ul id="collaborators"></ul>
+    </div>
+  </section>
+  <section id="acceptPanel" hidden>
+    <h2>Invitation reçue</h2>
+    <p id="inviteInfo"></p>
+    <button id="accept">Accepter l’invitation avec l’adresse vérifiée</button>
+  </section>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let selectedBranch = null;
+    let selectedOwner = false;
+    const inviteToken = new URLSearchParams(location.hash.slice(1)).get('invite');
+    const show = (message) => { $('message').textContent = message; };
+    async function call(path, options = {}) {
+      const response = await fetch(path, {credentials: 'same-origin', ...options});
+      const data = response.status === 204 ? null : await response.json();
+      if (!response.ok) throw new Error(data?.error?.message || data?.message || `Erreur HTTP ${response.status}`);
+      return data;
+    }
+    const json = (body, method = 'POST', headers = {}) =>
+      ({method, headers: {'content-type': 'application/json', ...headers}, body: JSON.stringify(body)});
+    const item = (list, text) => {
+      const node = document.createElement('li');
+      node.textContent = text;
+      list.appendChild(node);
+      return node;
+    };
+    async function run(task) { try { await task(); } catch (error) { show(error.message); } }
+
+    $('sendOtp').onclick = () => run(async () => {
+      await call('/api/auth/email-otp/send-verification-otp',
+        json({email: $('email').value, type: 'sign-in'}));
+      show('Code envoyé. En développement local, consultez la boîte de test depuis le terminal.');
+    });
+    $('verifyOtp').onclick = () => run(async () => {
+      await call('/api/auth/sign-in/email-otp',
+        json({email: $('email').value, otp: $('otp').value, name: $('name').value || 'Rédacteur'}));
+      await call('/auth/complete', {method: 'POST'});
+      show('Adresse vérifiée et session ouverte.');
+      await loadProjects();
+      if (inviteToken) await loadInvitation();
+    });
+    $('createProject').onclick = () => run(async () => {
+      const result = await call('/projects',
+        json({title: $('projectTitle').value, ownerTimeZone: $('timeZone').value},
+          'POST', {'Idempotency-Key': crypto.randomUUID()}));
+      show(`Projet créé : ${result.title}`);
+      await loadProjects();
+    });
+    $('refreshProjects').onclick = () => run(loadProjects);
+    async function loadProjects() {
+      const projects = await call('/projects');
+      $('projects').replaceChildren();
+      for (const project of projects) {
+        const branches = await call(`/projects/${project.projectId}/branches`);
+        const list = item($('projects'), `${project.title} — ${project.isOwner ? 'propriétaire' : 'collaborateur'}`);
+        for (const branch of branches) {
+          const button = document.createElement('button');
+          button.textContent = `Branche ${branch.number}`;
+          button.onclick = () => run(() => selectBranch(branch.id, project.isOwner));
+          list.appendChild(button);
+        }
+      }
+    }
+    async function selectBranch(branchId, isOwner) {
+      selectedBranch = branchId;
+      selectedOwner = isOwner;
+      $('branchPanel').hidden = false;
+      $('ownerPanel').hidden = !isOwner;
+      $('branchInfo').textContent = `Branche ${branchId}`;
+      const versions = await call(`/branches/${branchId}/versions`);
+      $('versions').replaceChildren();
+      for (const version of versions) {
+        const row = item($('versions'), `V${version.number} — ${version.state} `);
+        const link = document.createElement('a');
+        link.href = `http://127.0.0.1:9001/p/${encodeURIComponent(version.padId)}`;
+        link.textContent = 'Ouvrir';
+        row.appendChild(link);
+      }
+      if (isOwner) await loadSharing();
+    }
+    async function loadSharing() {
+      const [pending, collaborators] = await Promise.all([
+        call(`/branches/${selectedBranch}/invitations`),
+        call(`/branches/${selectedBranch}/collaborators`),
+      ]);
+      $('invitations').replaceChildren();
+      for (const invitation of pending) {
+        const row = item($('invitations'),
+          `${invitation.email} — ${invitation.access} — ${invitation.state} — e-mail ${invitation.emailStatus}`);
+        if (invitation.state === 'PENDING' || invitation.state === 'EXPIRED') {
+          const resend = document.createElement('button');
+          resend.textContent = 'Renvoyer';
+          resend.onclick = () => run(async () => {
+            await call(`/invitations/${invitation.id}/resend`, json({}));
+            await loadSharing();
+          });
+          row.appendChild(resend);
+        }
+        if (invitation.state === 'PENDING') {
+          const revoke = document.createElement('button');
+          revoke.textContent = 'Annuler';
+          revoke.onclick = () => run(async () => {
+            await call(`/invitations/${invitation.id}`, {method: 'DELETE'});
+            await loadSharing();
+          });
+          row.appendChild(revoke);
+        }
+      }
+      $('collaborators').replaceChildren();
+      for (const collaborator of collaborators) {
+        const row = item($('collaborators'), `${collaborator.name} <${collaborator.email}> `);
+        const select = document.createElement('select');
+        for (const access of ['READ', 'WRITE']) {
+          const option = document.createElement('option');
+          option.value = access; option.textContent = access; select.appendChild(option);
+        }
+        select.value = collaborator.access;
+        select.onchange = () => run(async () => {
+          await call(`/branches/${selectedBranch}/collaborators/${collaborator.userId}`,
+            json({access: select.value}, 'PUT'));
+          await loadSharing();
+        });
+        row.appendChild(select);
+        const revoke = document.createElement('button');
+        revoke.textContent = 'Retirer l’accès';
+        revoke.onclick = () => run(async () => {
+          await call(`/branches/${selectedBranch}/collaborators/${collaborator.userId}`,
+            {method: 'DELETE'});
+          await loadSharing();
+        });
+        row.appendChild(revoke);
+      }
+    }
+    $('invite').onclick = () => run(async () => {
+      const result = await call(`/branches/${selectedBranch}/invitations`,
+        json({email: $('inviteEmail').value, access: $('inviteAccess').value},
+          'POST', {'Idempotency-Key': crypto.randomUUID()}));
+      show(result.emailStatus === 'SENT' ? 'Invitation envoyée.' : 'Invitation enregistrée ; envoi échoué.');
+      await loadSharing();
+    });
+    async function loadInvitation() {
+      const info = await call('/invitations/preview', json({token: inviteToken}));
+      $('acceptPanel').hidden = false;
+      $('inviteInfo').textContent =
+        `${info.projectTitle} — ${info.email} — ${info.access} — ${info.state}`;
+    }
+    $('accept').onclick = () => run(async () => {
+      await call('/invitations/accept', json({token: inviteToken}));
+      show('Invitation acceptée.');
+      await loadProjects();
+      await loadInvitation();
+    });
+    if (inviteToken) run(loadInvitation);
+    run(loadProjects);
+  </script>
+</body>
+</html>

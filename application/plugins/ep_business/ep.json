@@ -1,0 +1,19 @@
+{
+  "parts": [
+    {
+      "name": "business",
+      "hooks": {
+        "authenticate": "ep_business/server:authenticate",
+        "authorize": "ep_business/server:authorize",
+        "handleMessage": "ep_business/server:handleMessage",
+        "businessBeforeUserChanges": "ep_business/server:businessBeforeUserChanges",
+        "expressPreSession": "ep_business/server:expressPreSession"
+      },
+      "client_hooks": {
+        "postAceInit": "ep_business/client:captureEditor",
+        "handleClientMessage_businessWriteRejected": "ep_business/client:handleRejected",
+        "handleClientMessage_businessClosing": "ep_business/client:handleClosing"
+      }
+    }
+  ]
+}

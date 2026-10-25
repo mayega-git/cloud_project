@@ -1,0 +1,8 @@
+{
+  "name": "ep_business",
+  "version": "0.1.8",
+  "private": true,
+  "description": "Business access and closure integration for Etherpad 3.3.6",
+  "engines": {"node": ">=24"},
+  "dependencies": {}
+}
