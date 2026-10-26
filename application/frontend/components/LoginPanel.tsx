@@ -66,11 +66,7 @@ export default function LoginPanel({onDone}: {onDone: () => void}) {
           <button type="button" disabled={busy || !otp} onClick={verify}>Vérifier et ouvrir la session</button>
         </div>
       )}
-      <div className="stack">
-        <p className="muted">
-          Mode local uniquement : connexion rapide sans code. L'adresse est seulement déclarée, elle n'est pas
-          vérifiée, et le déploiement ne doit pas être ouvert au public.
-        </p>
+      <div>
         <button type="button" className="secondary" disabled={busy || !email} onClick={quickLogin}>
           Connexion rapide (mode local)
         </button>

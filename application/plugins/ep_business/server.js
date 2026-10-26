@@ -2,6 +2,7 @@
 
 const {readFileSync} = require('node:fs');
 const {timingSafeEqual} = require('node:crypto');
+const Changeset = require('ep_etherpad-lite/static/js/Changeset');
 
 const internalKey = readFileSync(process.env.INTERNAL_KEY_FILE, 'utf8').trim();
 const backendUrl = process.env.BUSINESS_BACKEND_URL;
@@ -13,11 +14,22 @@ function sessionToken(cookieHeader) {
   return part ? part.slice('business_session='.length) : '';
 }
 
-async function access(padId, request, write) {
+// Writing cost of a change: the number of characters it inserts. Deletions and formatting are free.
+function insertedCharacters(changeset) {
+  let total = 0;
+  for (const op of Changeset.deserializeOps(Changeset.unpack(changeset).ops)) {
+    if (op.opcode === '+') total += op.chars;
+  }
+  return total;
+}
+
+async function access(padId, request, write, cost) {
   const response = await fetch(new URL('/internal/editor-access', backendUrl), {
     method: 'POST',
     headers: {'content-type': 'application/json', 'x-internal-key': internalKey},
-    body: JSON.stringify({padId, sessionToken: sessionToken(request.headers.cookie), write}),
+    body: JSON.stringify({
+      padId, sessionToken: sessionToken(request.headers.cookie), write, ...(write ? {cost} : {}),
+    }),
     signal: AbortSignal.timeout(3000),
   });
   if (!response.ok) return null;
@@ -71,8 +83,14 @@ exports.handleMessage = async (_hook, {message, sessionInfo, socket}) => {
   }
 };
 
-exports.businessBeforeUserChanges = async (_hook, {padId, socket}) => {
-  const grant = await access(padId, socket.request, true).catch(() => null);
+exports.businessBeforeUserChanges = async (_hook, {padId, socket, message}) => {
+  let cost;
+  try {
+    cost = insertedCharacters(message.data.changeset);
+  } catch {
+    return false; // An unreadable change is refused: the credit guarantee must not depend on it.
+  }
+  const grant = await access(padId, socket.request, true, cost).catch(() => null);
   return !!grant;
 };
 

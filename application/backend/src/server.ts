@@ -11,10 +11,21 @@ import {localMessages} from './email.js';
 import {InvitationService} from './domain/invitations.js';
 import {DomainError} from './domain/errors.js';
 import {BusinessService} from './domain/service.js';
+import {WriteCreditService} from './domain/credit.js';
+import {DownloadService} from './domain/downloads.js';
 
 const config = loadConfig();
-const app = Fastify({logger: true});
-const service = new BusinessService(new EtherpadClient(config), config.internalKey, config.etherpadApiUrl);
+// The load balancer routes /backend/* to the backends on the same port as the web pages, so the
+// browser stays on one origin. The prefix is removed before routing; direct calls are unchanged.
+function stripBackendPrefix(url: string | undefined): string {
+  const stripped = (url ?? '/').replace(/^\/backend(?=[/?]|$)/, '');
+  return stripped.startsWith('/') ? stripped : `/${stripped}`;
+}
+const app = Fastify({logger: true, rewriteUrl: (request) => stripBackendPrefix(request.url)});
+const etherpadClient = new EtherpadClient(config);
+const service = new BusinessService(etherpadClient, config.internalKey, config.etherpadApiUrl);
+const credit = new WriteCreditService();
+const downloads = new DownloadService(etherpadClient);
 const invitations = new InvitationService(process.env.AUTH_BASE_URL ?? 'http://127.0.0.1:3000',
   Number(process.env.INVITATION_LIFETIME_DAYS ?? '7'));
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -48,7 +59,7 @@ app.setErrorHandler((error, _request, reply) => {
 
 app.get('/health', async () => {
   await pool.query('SELECT 1');
-  return {status: 'ok', quota: 'NOT_IMPLEMENTED', authentication: config.localDevelopment ? 'LOCAL_ONLY' : 'UNAVAILABLE'};
+  return {status: 'ok', quota: 'DAILY_WRITE_CREDIT', authentication: config.localDevelopment ? 'LOCAL_ONLY' : 'UNAVAILABLE'};
 });
 app.get('/app', async (_request, reply) =>
   reply.type('text/html; charset=utf-8').send(readFileSync(new URL('../public/app.html', import.meta.url), 'utf8')));
@@ -254,7 +265,37 @@ app.post('/internal/editor-access', async (request) => {
   if (typeof body.padId !== 'string' || typeof body.sessionToken !== 'string' || typeof body.write !== 'boolean') {
     throw new DomainError(400, 'INVALID_BODY', 'padId, sessionToken, and write are required');
   }
-  return service.editorAccess(body.padId, body.sessionToken, body.write);
+  const access = await service.editorAccess(body.padId, body.sessionToken, body.write);
+  if (body.write) {
+    // Cost = characters inserted by the change, computed by the Etherpad plugin. Authorization
+    // comes first, so only authorized writes are debited; a refused change is never applied.
+    const cost = body.cost ?? 0;
+    if (typeof cost !== 'number') throw new DomainError(400, 'INVALID_COST', 'cost must be a number');
+    await credit.debit(access.userId, cost);
+  }
+  return access;
+});
+
+app.post('/branches/:branchId/download-links', async (request, reply) => {
+  const userId = await requireUser(request);
+  const body = object(request.body);
+  const maxDownloads = typeof body.maxDownloads === 'number' ? body.maxDownloads : Number.NaN;
+  const created = await downloads.createLink(userId, id(params(request.params).branchId), maxDownloads);
+  const url = new URL(`/d/${created.token}`, process.env.AUTH_BASE_URL ?? 'http://127.0.0.1:3000').toString();
+  return reply.code(201).send({linkId: created.id, url, maxDownloads});
+});
+app.get('/branches/:branchId/download-links', async (request) =>
+  downloads.listLinks(await requireUser(request), id(params(request.params).branchId)));
+
+// Public routes: visitors have no identity.
+app.get('/d/:token/status', async (request) => downloads.status(params(request.params).token ?? ''));
+app.get('/d/:token', async (request, reply) => {
+  const result = await downloads.download(params(request.params).token ?? '');
+  return reply.header('content-type', 'application/pdf')
+    .header('content-disposition', 'attachment; filename="document.pdf"')
+    .header('cache-control', 'no-store')
+    .header('x-remaining-downloads', String(result.remaining))
+    .send(result.pdf);
 });
 
 let working = false;

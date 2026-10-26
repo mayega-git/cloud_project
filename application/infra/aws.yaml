@@ -324,7 +324,8 @@ Resources:
       Port: 3000
       TargetType: instance
       HealthCheckPath: /health
-      HealthCheckIntervalSeconds: 15
+      HealthCheckIntervalSeconds: 5
+      HealthCheckTimeoutSeconds: 3
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 2
       TargetGroupAttributes:
@@ -339,7 +340,8 @@ Resources:
       TargetType: instance
       # Etherpad answers /health without authentication through the gateway.
       HealthCheckPath: /health
-      HealthCheckIntervalSeconds: 15
+      HealthCheckIntervalSeconds: 5
+      HealthCheckTimeoutSeconds: 3
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 2
       TargetGroupAttributes:
@@ -352,8 +354,11 @@ Resources:
       Protocol: HTTP
       Port: 3001
       TargetType: instance
+      # The pages are static: a frontend has no dependency on any backend. API calls do not
+      # go through it (see BackendPathRule), so its health check must not involve a backend.
       HealthCheckPath: /
-      HealthCheckIntervalSeconds: 15
+      HealthCheckIntervalSeconds: 5
+      HealthCheckTimeoutSeconds: 3
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 2
       TargetGroupAttributes:
@@ -366,6 +371,19 @@ Resources:
       Protocol: HTTP
       Port: 3001
       DefaultActions: [{Type: forward, TargetGroupArn: !Ref FrontendTargetGroup}]
+  # One origin for the browser: pages go to any frontend, API and public download links go to
+  # whichever backend is healthy. The load balancer, not the frontend, handles a backend failure.
+  BackendPathRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref FrontendListener
+      Priority: 10
+      Conditions:
+        - Field: path-pattern
+          Values: ["/backend/*", "/d/*"]
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref ApplicationTargetGroup
   ApplicationListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -524,7 +542,7 @@ Resources:
                 ETHERPAD_API_KEY_FILE: /run/business/APIKEY.txt
                 INTERNAL_KEY_FILE: /run/business/INTERNAL_KEY.txt
                 BETTER_AUTH_SECRET_FILE: /run/business/BETTER_AUTH_SECRET.txt
-                AUTH_BASE_URL: http://$ALB_DNS
+                AUTH_BASE_URL: http://$ALB_DNS:3001
                 INVITATION_LIFETIME_DAYS: "7"
               volumes:
                 - /opt/app/secrets/APIKEY.txt:/run/business/APIKEY.txt:ro
@@ -680,7 +698,7 @@ Resources:
                 ETHERPAD_API_KEY_FILE: /run/business/APIKEY.txt
                 INTERNAL_KEY_FILE: /run/business/INTERNAL_KEY.txt
                 BETTER_AUTH_SECRET_FILE: /run/business/BETTER_AUTH_SECRET.txt
-                AUTH_BASE_URL: http://$ALB_DNS
+                AUTH_BASE_URL: http://$ALB_DNS:3001
                 INVITATION_LIFETIME_DAYS: "7"
               volumes:
                 - /opt/app/secrets/APIKEY.txt:/run/business/APIKEY.txt:ro

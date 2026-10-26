@@ -143,9 +143,9 @@ wait_for backend \
 wait_for etherpad \
   "fetch('http://etherpad:9001/').then(()=>process.exit(0)).catch(()=>process.exit(1))"
 
-step "Integration tests (business + invitations)"
+step "Integration tests (business, invitations, downloads and credit)"
 "${compose[@]}" run --rm --no-deps \
   -e RUN_INTEGRATION=1 -e BUSINESS_BASE_URL=http://backend:3000 \
-  backend node --test dist/domain/business.integration.test.js dist/domain/invitation.integration.test.js
+  backend node --test dist/domain/business.integration.test.js dist/domain/invitation.integration.test.js dist/domain/downloads.integration.test.js
 
 step "CI local: all steps passed"
