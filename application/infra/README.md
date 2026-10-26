@@ -30,7 +30,16 @@ Les deux instances sont dans des sous-réseaux publics avec une adresse IPv4 pub
 3. Renseigner : `VpcId` (le VPC par défaut, repéré dans la liste), `SubnetAId` et `SubnetBId` (deux sous-réseaux de ce VPC dans **deux zones différentes**), `AllowedCidr` (par exemple votre adresse en `x.x.x.x/32`), `BackendImage` et `EtherpadImage`. Facultatif : `SshCidr` (votre adresse en `x.x.x.x/32`) et `KeyPairName` (une paire de clés créée avant dans la console EC2, dont le fichier privé reste hors du dépôt).
 4. Cocher la case qui autorise la création de ressources IAM, puis créer la pile.
 5. Attendre `CREATE_COMPLETE`. L'onglet Sorties donne `PublicUrl`, `EditorUrl`, le bucket et les identifiants des instances.
-6. En cas d'échec de démarrage : session Systems Manager sur l'instance, puis `sudo tail -n 100 /var/log/app-bootstrap.log` et `sudo docker compose --env-file /opt/app/.env -f /opt/app/compose.yaml ps`.
+6. En cas d'échec de démarrage : console EC2, instance, Actions, Surveillance et dépannage, **Obtenir le journal système** (sans connexion), ou session Systems Manager puis `sudo tail -n 100 /var/log/app-bootstrap.log` et `sudo docker compose --env-file /opt/app/.env -f /opt/app/compose.yaml ps`.
+7. Le script de démarrage ne s'exécute qu'une fois, au premier démarrage. Après avoir corrigé la cause d'un échec, relancer à la main sur l'instance A (en session Systems Manager) :
+   ```sh
+   cd /opt/app
+   DC="sudo docker compose --env-file /opt/app/.env -f /opt/app/compose.yaml"
+   $DC --profile a up -d etherpad
+   $DC run --rm --no-deps backend node dist/database.js
+   $DC --profile a up -d backend gateway
+   ```
+   Sur l'instance B, les conteneurs redémarrent seuls (`restart: unless-stopped`) une fois la base joignable ; sinon, `$DC up -d backend gateway`.
 
 ## Contrôles à exécuter, et ce qu'ils prouvent
 
@@ -54,7 +63,8 @@ Aucun de ces contrôles n'a encore été exécuté sur AWS.
 - **Mode d'identité local.** `APP_ENV=local` est fixé : la route `/dev/sessions` permet de se faire passer pour n'importe quelle adresse, et aucun SMTP n'est configuré. À limiter par `AllowedCidr`. La boîte mail de test (`/dev/mailbox`) est en mémoire **par instance** : avec deux backends, une requête peut arriver sur l'autre et ne pas retrouver le code.
 - **HTTP seulement.** Sans nom de domaine, pas de certificat reconnu. Les cookies ne sont pas marqués `Secure`.
 - **Plusieurs backends non éprouvés.** Les tests d'intégration ont été exécutés contre un seul backend. La concurrence entre deux backends sur les clôtures est protégée par des verrous en base, sans test dédié.
-- **RDS dans une seule zone** : pas de résistance à la perte de cette zone. La compatibilité SSL entre Etherpad et RDS n'a pas été testée.
+- **RDS dans une seule zone** : pas de résistance à la perte de cette zone.
+- **Connexion à la base non chiffrée.** RDS PostgreSQL refuse par défaut les connexions sans TLS (`no pg_hba.conf entry ... no encryption`, observé au premier déploiement). Ni le backend ni Etherpad n'étant configurés pour TLS, la pile désactive `rds.force_ssl` dans un groupe de paramètres. Le trafic reste dans le VPC et n'est ouvert qu'au groupe de sécurité des instances, mais il n'est pas chiffré. Une amélioration serait de configurer TLS dans le backend (`sslmode`) et dans Etherpad.
 - **Fonctions absentes du code** : liens de téléchargement limités, PDF, crédit d'écriture, blocage, notification. Le bucket S3 et le rôle prévoient seulement le préfixe `exports/`.
 - Les instances sont créées une fois : une nouvelle version des images demande de remplacer les instances (mise à jour de la pile avec de nouvelles références) ou de relancer les conteneurs en session Systems Manager. Il n'y a pas encore de pipeline de redéploiement ni de retour arrière automatique.
 
