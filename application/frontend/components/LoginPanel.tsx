@@ -30,6 +30,12 @@ export default function LoginPanel({onDone}: {onDone: () => void}) {
     setMessage({kind: 'ok', text: 'Code envoyé. En mode local, il se lit dans la boîte de test du backend.'});
   });
 
+  // Local mode only (the backend answers 404 elsewhere): no code, the address is only declared.
+  const quickLogin = () => run(async () => {
+    await api('/dev/sessions', {method: 'POST', json: {name: name || 'Rédacteur', email, verified: true}});
+    onDone();
+  });
+
   const verify = () => run(async () => {
     await api('/api/auth/sign-in/email-otp', {method: 'POST', json: {email, otp, name: name || 'Rédacteur'}});
     await api('/auth/complete', {method: 'POST'});
@@ -60,6 +66,15 @@ export default function LoginPanel({onDone}: {onDone: () => void}) {
           <button type="button" disabled={busy || !otp} onClick={verify}>Vérifier et ouvrir la session</button>
         </div>
       )}
+      <div className="stack">
+        <p className="muted">
+          Mode local uniquement : connexion rapide sans code. L'adresse est seulement déclarée, elle n'est pas
+          vérifiée, et le déploiement ne doit pas être ouvert au public.
+        </p>
+        <button type="button" className="secondary" disabled={busy || !email} onClick={quickLogin}>
+          Connexion rapide (mode local)
+        </button>
+      </div>
       {message && <p role="status" className={`notice ${message.kind}`}>{message.text}</p>}
     </section>
   );

@@ -28,6 +28,8 @@ jobs:
             dockerfile: application/deployment/Dockerfile.backend
           - image: etherpad
             dockerfile: application/deployment/Dockerfile.etherpad
+          - image: frontend
+            dockerfile: application/deployment/Dockerfile.frontend
     steps:
       - uses: actions/checkout@v4
 

@@ -28,6 +28,9 @@ Parameters:
   EtherpadImage:
     Type: String
     Description: Full image reference published by the "Publish images" workflow (tag@digest).
+  FrontendImage:
+    Type: String
+    Description: Full image reference of the Next.js frontend published by the "Publish images" workflow.
   KeyPairName:
     Type: String
     Default: ""
@@ -70,6 +73,7 @@ Resources:
       SecurityGroupIngress:
         - {IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: !Ref AllowedCidr}
         - {IpProtocol: tcp, FromPort: 9001, ToPort: 9001, CidrIp: !Ref AllowedCidr}
+        - {IpProtocol: tcp, FromPort: 3001, ToPort: 3001, CidrIp: !Ref AllowedCidr}
   AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -88,6 +92,14 @@ Resources:
       IpProtocol: tcp
       FromPort: 3000
       ToPort: 3000
+      SourceSecurityGroupId: !Ref AlbSecurityGroup
+  AppFromAlbFrontend:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AppSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3001
+      ToPort: 3001
       SourceSecurityGroupId: !Ref AlbSecurityGroup
   AppFromAlbGateway:
     Type: AWS::EC2::SecurityGroupIngress
@@ -333,6 +345,27 @@ Resources:
       TargetGroupAttributes:
         - {Key: deregistration_delay.timeout_seconds, Value: "30"}
       Targets: [{Id: !Ref InstanceA}, {Id: !Ref InstanceB}]
+  FrontendTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VpcId
+      Protocol: HTTP
+      Port: 3001
+      TargetType: instance
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 15
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      TargetGroupAttributes:
+        - {Key: deregistration_delay.timeout_seconds, Value: "30"}
+      Targets: [{Id: !Ref InstanceA}, {Id: !Ref InstanceB}]
+  FrontendListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Protocol: HTTP
+      Port: 3001
+      DefaultActions: [{Type: forward, TargetGroupArn: !Ref FrontendTargetGroup}]
   ApplicationListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -517,6 +550,12 @@ Resources:
           $DC --profile a up -d etherpad
           $DC run --rm --no-deps backend node dist/database.js
           $DC --profile a up -d backend gateway
+          # Frontend: one container per instance, on the Compose network, talking to the local backend.
+          docker pull ${FrontendImage}
+          docker rm -f frontend 2>/dev/null || true
+          docker run -d --name frontend --restart unless-stopped --network app_default --memory 256m \
+            -p 3001:3001 -e BACKEND_URL=http://backend:3000 \
+            -e BACKEND_PUBLIC_ORIGIN=http://${LoadBalancer.DNSName} ${FrontendImage}
           echo "bootstrap finished"
 
   InstanceB:
@@ -669,6 +708,12 @@ Resources:
           done
           $DC pull
           $DC up -d backend gateway
+          # Frontend: one container per instance, on the Compose network, talking to the local backend.
+          docker pull ${FrontendImage}
+          docker rm -f frontend 2>/dev/null || true
+          docker run -d --name frontend --restart unless-stopped --network app_default --memory 256m \
+            -p 3001:3001 -e BACKEND_URL=http://backend:3000 \
+            -e BACKEND_PUBLIC_ORIGIN=http://${LoadBalancer.DNSName} ${FrontendImage}
           echo "bootstrap finished"
 
 Outputs:
@@ -678,6 +723,9 @@ Outputs:
   EditorUrl:
     Description: Editor entry point (HTTP only)
     Value: !Sub "http://${LoadBalancer.DNSName}:9001"
+  FrontendUrl:
+    Description: Web interface entry point (HTTP only)
+    Value: !Sub "http://${LoadBalancer.DNSName}:3001"
   ExportsBucketName:
     Value: !Ref ExportsBucket
   DatabaseEndpoint:
