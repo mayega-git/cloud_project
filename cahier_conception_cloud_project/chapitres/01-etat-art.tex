@@ -1,50 +1,34 @@
 \chapter{État de l'art et étude de l'existant}
 \section{Problématique et méthode de comparaison}
-Un éditeur collaboratif doit concilier une interaction fluide et un contenu partagé cohérent. Le projet y ajoute des contraintes métier : crédit quotidien d'écriture, distribution d'un nombre exact d'exemplaires, contenu actualisé derrière un lien stable et maintien d'une réponse explicite pendant un pic de fréquentation .
+Un éditeur collaboratif doit synchroniser les textes sans ralentir la saisie. Le projet ajoute un crédit quotidien, un nombre exact de téléchargements et un PDF actuel derrière un lien stable, y compris lors d'un pic de fréquentation.
 
-L'état de l'art présente les mécanismes utilisables ; l'étude de l'existant observe leur emploi dans des produits. 
-Google Docs est retenu pour l'édition généraliste dans le navigateur et Overleaf pour l'articulation entre collaboration,
- sources textuelles et production de PDF. Yjs est étudié comme bibliothèque alternative, sans lui attribuer un usage chez ces deux éditeurs.
+L'état de l'art décrit les mécanismes ; l'étude de l'existant observe leur emploi. Google Docs sert de référence pour l'édition généraliste, Overleaf pour la collaboration autour de sources et de PDF. Yjs est étudié comme option, sans lui attribuer un usage chez ces produits.
 
 La comparaison distingue trois niveaux de preuve : \textbf{fonction documentée}, \textbf{mécanisme technique publié} et \textbf{déploiement documenté}. 
 
 \section{Mécanismes de collaboration}
 \subsection{Transformation opérationnelle : OT}
-La transformation opérationnelle ajuste une opération par rapport aux changements intervenus depuis l'état du document connu par son auteur. Si un rédacteur insère du texte avant une zone qu'un autre modifie, les positions doivent être adaptées pour éviter de viser les mauvais caractères. Google l'illustre dans son explication de 2010 \cite{google-ot}.
+La transformation opérationnelle (OT) adapte une modification aux changements intervenus depuis l'état connu de son auteur. Elle ajuste, par exemple, les positions d'une édition lorsque l'autre rédacteur a inséré du texte avant la zone visée. Google en décrit le principe en 2010 \cite{google-ot}.
 
-OT s'inscrit dans un protocole qui gère l'ordre des révisions, les opérations locales en attente et 
-les acquittements. Le protocole historique de Google autorise l'application locale optimiste d'une saisie, 
-puis sa réconciliation avec les opérations échangées avec le serveur \cite{google-protocole}. L'affichage local 
-d'une frappe ne suffit donc pas à définir son acceptation durable par le système.
+Un protocole OT gère aussi l'ordre des révisions, les opérations en attente et leurs acquittements. Le protocole Google publié permet l'affichage local optimiste, puis réconcilie les saisies avec celles reçues du serveur \cite{google-protocole}. Une frappe affichée n'est donc pas nécessairement acceptée durablement.
 
 \subsection{Types de données répliquées sans conflit : CRDT}
-Une autre famille de solutions organise les données et les opérations pour permettre la fusion de modifications concurrentes. 
-Yjs expose des types partagés et sépare le modèle de données du transport et des intégrations avec les éditeurs \cite{yjs-intro}. 
-Sa documentation décrit des mises à jour commutatives, associatives et idempotentes ; les répliques convergent lorsqu'elles ont reçu toutes les mises à jour \cite{yjs-updates}.
+Les CRDT organisent les données pour fusionner des modifications concurrentes. Yjs fournit des types partagés indépendants du transport et de l'éditeur ; ses mises à jour sont commutatives, associatives et idempotentes. Les répliques convergent après réception de toutes les mises à jour \cite{yjs-intro,yjs-updates}.
 
-Cette propriété ne remplace pas le contrôle des autorisations, la persistance ni l'application d'un crédit d'écriture partagé.
- Pour le projet, le choix OT ou CRDT devra être évalué avec les règles d'acceptation des modifications .
+La convergence ne remplace ni les autorisations ni la persistance ou le contrôle du crédit. Le choix OT/CRDT doit aussi respecter les règles d'acceptation des modifications.
 
 \subsection{Transport, présence et historique}
-Un canal de transport livre les messages ; il ne résout pas à lui seul leurs conflits. 
-Overleaf distingue ainsi OT pour réconcilier les modifications et WebSocket pour pousser les changements aux clients \cite{overleaf-collaboration}. 
-La présence et les positions d'écriture sont des informations complémentaires au contenu.
+Le transport livre les messages, mais ne résout pas leurs conflits. Overleaf documente OT pour les réconcilier et WebSocket pour notifier les clients. Présences et positions complètent le contenu partagé \cite{overleaf-collaboration}.
 
 \section{Google Docs : fonctionnement publié et limites de connaissance}
 \subsection{Fonctions pertinentes}
-La documentation Google décrit le partage avec des rôles de lecteur, commentateur et éditeur \cite{google-partage},
- la consultation et la restauration des versions \cite{google-historique}, ainsi que l'enregistrement automatique et 
- le téléchargement des documents, dont la production d'un PDF \cite{google-export}. 
- Ces fonctions fournissent des références d'usage pour le partage, l'historique et la diffusion.
+Google documente les rôles de partage, l'historique et la restauration, ainsi que l'enregistrement et le téléchargement en PDF. Ces fonctions servent de repères pour le projet \cite{google-partage,google-historique,google-export}.
 
 Une limite doit être prise en compte : l'aide Google annonce un maximum de 100 appareils ou onglets pouvant modifier simultanément un même fichier. 
 
 
 \subsection{Architecture du protocole décrite en 2010}
-Dans la publication technique de Google, chaque client conserve ses opérations en attente et sa dernière révision synchronisée.
- Le serveur traite les opérations et enregistre les révisions. Il acquitte l'émetteur et communique les changements aux autres clients ;
-  ceux-ci les réconcilient avec leur état local \cite{google-protocole}. 
-  Le journal d'opérations et la transformation des positions sont décrits dans l'article consacré à la résolution des conflits \cite{google-ot}.
+Dans la description de 2010, chaque client conserve ses opérations en attente et sa dernière révision synchronisée. Le serveur traite et enregistre les opérations, acquitte leur auteur et transmet les changements aux autres clients, qui les réconcilient localement \cite{google-protocole,google-ot}.
 
 \umlfigure{google-protocole.png}{1}{Séquence UML simplifiée du protocole Google publié en 2010 ; illustration documentaire, 
 sans prétention sur la pile actuelle.}{fig:google}
@@ -52,34 +36,23 @@ sans prétention sur la pile actuelle.}{fig:google}
 
 \section{Overleaf : collaboration et chaîne de production PDF}
 \subsection{Mécanisme de collaboration et outils identifiés}
-Overleaf documente explicitement l'emploi d'OT : les changements sont transmis au serveur, qui les rebase pour
- faire converger les clients. WebSocket assure la notification des changements \cite{overleaf-collaboration}.
+Overleaf documente OT pour réconcilier les changements côté serveur et WebSocket pour les transmettre aux clients \cite{overleaf-collaboration}.
 
-Le dépôt officiel déclare un moteur Node.js, de l'outillage TypeScript, ainsi que des dépendances ou résolutions associées à
- React et CodeMirror \cite{overleaf-code}. Ce manifeste identifie des technologies du code publié ; il ne démontre pas à lui seul leur usage dans 
- chaque écran ni la topologie du service commercial. OT désigne ici le mécanisme de collaboration, tandis que les bibliothèques d'interface répondent 
- à une autre responsabilité.//quel responsabilite 
+Le dépôt officiel déclare Node.js, TypeScript et des dépendances liées à React et CodeMirror. Ce manifeste décrit le code publié, sans établir l'usage de chaque dépendance ni l'architecture du service commercial. OT et les bibliothèques d'interface répondent à des rôles distincts \cite{overleaf-code}.
 
 \subsection{Architecture sur site documentée}
-La documentation des éditions sur site distingue les services 
-\texttt{web}, \texttt{real-time}, \texttt{document-updater}, \texttt{docstore}, \texttt{filestore} et \texttt{clsi}. 
-Leurs rôles couvrent les requêtes, les sockets, les modifications, les documents, les fichiers binaires et la compilation.
- Redis intervient dans les mises à jour actives et MongoDB dans le stockage des documents ; le Toolkit peut fournir des conteneurs pour
-  ces dépendances \cite{overleaf-microservices}.
+La documentation sur site sépare les services \texttt{web}, \texttt{real-time}, \texttt{document-updater}, \texttt{docstore}, \texttt{filestore} et \texttt{clsi}. Elle associe Redis aux mises à jour actives, MongoDB aux documents et Docker à l'exécution de ces composants \cite{overleaf-microservices}.
 
-L'infrastructure Server Pro documente Docker et un accès web servi par Nginx. La compilation isolée de Server Pro utilise des conteneurs ;
- la documentation distingue ce fonctionnement des sous-processus utilisés par Server CE \cite{overleaf-infra,overleaf-microservices}.
+Server Pro documente Docker et Nginx ; sa compilation s'exécute dans des conteneurs. Server CE utilise des sous-processus, selon la documentation consultée \cite{overleaf-infra,overleaf-microservices}.
 
 \umlfigure{overleaf-composants.png}{1}{Diagramme UML de composants : vue simplifiée des éditions Overleaf sur site, d'après leur documentation. Les dépendances expriment les échanges principaux.}{fig:overleaf}
 
 
 
 \subsection{Persistance et limites de transposition}
-La documentation de sauvegarde indique que Redis contient notamment des mises à jour en attente avant leur transfert vers MongoDB et 
-recommande la persistance AOF \cite{overleaf-backups}. Ce point attire l'attention sur la distinction entre données en mémoire et données récupérables :
- une politique de cache ne constitue pas, à elle seule, une preuve de conservation des écritures acceptées.
+La documentation de sauvegarde indique que Redis conserve temporairement des mises à jour avant leur transfert vers MongoDB et recommande AOF. Un cache seul ne prouve donc pas la conservation des écritures acceptées \cite{overleaf-backups}.
 
-Overleaf montre également l'intérêt de séparer édition et génération PDF. Le sujet demandé porte toutefois sur du texte simple : il n'impose ni la saisie LaTeX ni un moteur de compilation TeX pour l'application. LaTeX est ici le format du cahier de conception.
+Overleaf distingue l'édition de la production PDF. Le sujet porte sur du texte simple : il n'impose ni LaTeX ni un moteur TeX à l'application. LaTeX sert uniquement à produire ce cahier.
 
 \section{Synthèse comparative et enseignements}
 \begin{table}[H]\small
@@ -95,5 +68,5 @@ Validation & Aucune extrapolation de charge retenue & Aucune extrapolation de ch
 \caption{Comparaison limitée aux faits documentés et aux besoins du sujet.}
 \end{table}
 
-L'étude fait ressortir quatre responsabilités à examiner lors de la conception : synchroniser les modifications, définir leur acceptation, produire une version PDF cohérente et contrôler les consommations métier. La convergence d'un éditeur ne garantit pas l'exactitude d'un compteur de téléchargements. De même, un fichier disponible dans S3 ne suffit pas à établir une limitation du nombre de distributions.
+La conception doit traiter séparément la synchronisation, l'acceptation, la production d'un PDF cohérent et les quotas métier. La convergence ne garantit pas le nombre exact de téléchargements, pas plus que le stockage dans S3.
 

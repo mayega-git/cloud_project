@@ -1,10 +1,12 @@
 \begingroup
 \small
 \begin{thebibliography}{99}
-\setlength{\itemsep}{3pt}
+\setlength{\itemsep}{0pt}
+\setlength{\parskip}{0pt}
 \addcontentsline{toc}{chapter}{Références}
 \bibitem{sujet} \emph{Projet d'évaluation : Un éditeur de documents partagé. Développement web et cloud.} Sujet fourni par le porteur du projet, 3 pages. Fichier local : \texttt{sujet\_projet\_stage-1.pdf}.
 \bibitem{cours} \emph{Ingénierie des exigences. Lesson 2 -- Spécification.} Support fourni, 39 diapositives, fondé sur Ian Sommerville, \emph{Software Engineering}, 9e édition. Fichier source : \texttt{Lecon-2\_GL-Spécification.pdf}. Les numéros cités désignent les diapositives.
+\bibitem{cours-aws} \emph{Introduction à AWS.} Support de cours fourni, 117 diapositives. Fichier local \texttt{introduction-aws.pdf}, modules sur IAM, EC2, groupes de sécurité, S3, RDS, ALB et architectures à deux zones ; consulté le 26 octobre 2026.
 \bibitem{decisions-porteur} Porteur du projet. \emph{Cadrage de l'historique, des versions métier, des branches, des droits, du gel quotidien et de la vérification e-mail.} Décisions communiquées le 25 octobre 2026. Ces précisions et extensions ne sont pas attribuées au sujet initial.
 \bibitem{google-ot} John Day-Richter, Google. \emph{What's different about the new Google Docs: Conflict resolution.} 22 septembre 2010. Source historique.\par\url{https://drive.googleblog.com/2010/09/whats-different-about-new-google-docs_22.html}
 \bibitem{google-protocole} John Day-Richter, Google. \emph{What's different about the new Google Docs: Making collaboration fast.} 23 septembre 2010. Source historique.\par\url{https://drive.googleblog.com/2010/09/whats-different-about-new-google-docs.html}
@@ -19,23 +21,19 @@
 \bibitem{yjs-intro} Yjs. \emph{Introduction.} Documentation officielle du modèle CRDT et de ses intégrations.\par\url{https://docs.yjs.dev/}
 \bibitem{yjs-updates} Yjs. \emph{Document Updates.} Documentation officielle des propriétés et de l'API des mises à jour.\par\url{https://docs.yjs.dev/api/document-updates}
 \bibitem{etherpad-release} Etherpad. \emph{Version 3.3.6.} Publication officielle, 21 septembre 2026.\par\url{https://github.com/ether/etherpad/releases/tag/v3.3.6}
-\bibitem{etherpad-docker} Etherpad. \emph{Docker.} Documentation correspondant au tag v3.3.6 : image, configuration et persistance.\par\url{https://github.com/ether/etherpad/blob/v3.3.6/doc/docker.md}
-\bibitem{etherpad-api} Etherpad. \emph{HTTP API.} Documentation du tag v3.3.6, API 1.3.1.\par\url{https://github.com/ether/etherpad/blob/v3.3.6/doc/api/http_api.md}
-\bibitem{etherpad-hooks} Etherpad. \emph{Server-side hooks.} Référence des points d'extension, à confronter au code de la version intégrée.\par\url{https://docs.etherpad.org/api/hooks_server-side.html}
-\bibitem{etherpad-handler-336} Etherpad. \emph{PadMessageHandler.ts}, tag v3.3.6. Traitement des messages, file par pad et acquittement des écritures. Code source consulté le 25 octobre 2026.\par\url{https://github.com/ether/etherpad/blob/v3.3.6/src/node/handler/PadMessageHandler.ts}
-\bibitem{etherpad-pad-336} Etherpad. \emph{Pad.ts}, tag v3.3.6. Ajout de révision et effets du hook de mise à jour. Code source consulté le 25 octobre 2026.\par\url{https://github.com/ether/etherpad/blob/v3.3.6/src/node/db/Pad.ts}
-\bibitem{etherpad-api-code-336} Etherpad. \emph{API.ts}, tag v3.3.6. Implémentation de \texttt{getText}, \texttt{createPad} et \texttt{restoreRevision}. Code source consulté le 25 octobre 2026.\par\url{https://github.com/ether/etherpad/blob/v3.3.6/src/node/db/API.ts}
-\bibitem{etherpad-client-336} Etherpad. \emph{collab\_client.ts} et \emph{pad.ts}, tag v3.3.6. Coupure, reconnexion et modifications locales en attente. Code source consulté le 25 octobre 2026.\par\url{https://github.com/ether/etherpad/blob/v3.3.6/src/static/js/collab_client.ts}\par\url{https://github.com/ether/etherpad/blob/v3.3.6/src/static/js/pad.ts}
-\bibitem{etherpad-export-336} Etherpad. \emph{ace2\_inner.ts}, tag v3.3.6. Export du texte local complet. Code source consulté le 25 octobre 2026.\par\url{https://github.com/ether/etherpad/blob/v3.3.6/src/static/js/ace2_inner.ts}
+\bibitem{etherpad-scale} Etherpad. \emph{Scale Calculator.} Calculateur de ressources, qui précise que ses résultats sont des repères approximatifs et que certaines performances de base de données distribuée n'ont pas été testées. Consulté le 26 octobre 2026.\par\url{https://scale.etherpad.org/}
+\bibitem{etherpad-loadtest} Etherpad. \emph{etherpad-load-test.} Dépôt officiel de l'outil de simulation de charge ; les consignes distinguent auteurs actifs et lecteurs et recommandent d'adapter le scénario au cas d'usage. Consulté le 26 octobre 2026.\par\url{https://github.com/ether/etherpad-load-test}
+\bibitem{etherpad-7756} Etherpad. \emph{Issue \#7756, Performance: Look deeper into scaling N+ contributors per pad.} Ouverte le 15 mai 2026. Discussion de pistes de recherche, sans résultats du test PostgreSQL/PgBouncer transmis avec la demande. Consultée le 26 octobre 2026.\par\url{https://github.com/ether/etherpad/issues/7756}
+\bibitem{nodejs20-cli} Node.js. \emph{Documentation v20.20.2, Command-line API.} Description de \texttt{UV\_THREADPOOL\_SIZE} et des API qui utilisent le pool libuv ; consultée le 26 octobre 2026.\par\url{https://nodejs.org/docs/latest-v20.x/api/cli.html\#uv\_threadpool\_sizesize}
 \bibitem{better-auth-otp} Better Auth. \emph{Email OTP.} Documentation officielle du plugin intégré pour la connexion par code et la vérification de l'adresse e-mail, consultée le 25 octobre 2026.\par\url{https://better-auth.com/docs/plugins/email-otp}
 \bibitem{better-auth-fastify} Better Auth. \emph{Fastify Integration Guide.} Handler et lecture des sessions, consulté le 25 octobre 2026.\par\url{https://better-auth.com/docs/integrations/fastify}
 \bibitem{better-auth-postgres} Better Auth. \emph{PostgreSQL Adapter.} Configuration de la base et schéma dédié, consulté le 25 octobre 2026.\par\url{https://better-auth.com/docs/adapters/postgresql}
 \bibitem{postgres-doc} PostgreSQL Global Development Group. \emph{Documentation PostgreSQL 15.} Transactions et contraintes.\par\url{https://www.postgresql.org/docs/15/}
 \bibitem{nodemailer-doc} Nodemailer. \emph{Nodemailer documentation.} Transport SMTP configurable.\par\url{https://nodemailer.com/smtp}
-\bibitem{cursortrace} Etherpad. \emph{ep\_cursortrace.} Dépôt et instructions du plugin de positions d'écriture.\par\url{https://github.com/ether/ep_cursortrace}
-\bibitem{cursortrace-npm} npm. \emph{ep\_cursortrace 3.1.65.} Métadonnées de version et de moteur Node.js consultées le 25 octobre 2026.\par\url{https://www.npmjs.com/package/ep_cursortrace}
 \bibitem{fastify} Fastify. \emph{Migration Guide V5} et publication v5.12.7. Node.js 20 ou supérieur est pris en charge par la branche 5.\par\url{https://fastify.dev/docs/v5.10.x/Guides/Migration-Guide-V5/}\par\url{https://github.com/fastify/fastify/releases/tag/v5.12.7}
-\bibitem{onlyoffice} ONLYOFFICE. \emph{Document Server.} Dépôt officiel et description des fonctions d'édition de documents bureautiques.\par\url{https://github.com/ONLYOFFICE/DocumentServer}
+\bibitem{aws-cost-explorer} Amazon Web Services. \emph{Exploring your data using Cost Explorer.} Documentation de consultation des coûts, consultée le 26 octobre 2026.\par\url{https://docs.aws.amazon.com/cost-management/latest/userguide/ce-exploring-data.html}
+\bibitem{aws-local-artifacts} Porteur du projet. Fichiers consultés le 26 octobre 2026 : \texttt{application/infra/aws.yaml}, \texttt{application/infra/README.md}, \texttt{application/ci-local.sh}, \texttt{.github/workflows/ci.yml}, \texttt{.github/workflows/cd.yml}, \texttt{application/backend/src/server.ts}. Sources de l'état configuré et des routes ; les essais AWS n'ont pas tous été rejoués pour cette édition.
+\bibitem{aws-test-records} Porteur du projet. \emph{CONTEXTE\_CLAUDE\_LOCAL.md}, sections « Premier déploiement AWS », « Point d'étape » et « Tests réels sur AWS ». Relevé local non versionné, consulté le 26 octobre 2026. Il conserve les résultats rapportés ; le fichier n'est pas inclus dans les livrables du dépôt.
 \end{thebibliography}
 
 \endgroup

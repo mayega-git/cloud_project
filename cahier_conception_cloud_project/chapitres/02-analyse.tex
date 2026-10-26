@@ -40,7 +40,7 @@ EU-01 et EU-02 permettent la rédaction commune ; EU-03 permet de revenir sur l'
  EU-08 informe le responsable de la diffusion.
 
 \section{Exigences fonctionnelles détaillées}
-Chaque énoncé exprime une fonction. La source et le besoin parent assurent sa traçabilité et portent sa justification métier. Les critères constituent un protocole de vérification à préparer, et non des résultats déjà obtenus. Les mentions « à préciser » renvoient au registre des questions de la section~\ref{sec:questions}.
+Chaque énoncé exprime une fonction. La source et le besoin parent assurent sa traçabilité et portent sa justification métier. Les critères constituent un protocole de vérification à préparer, et non des résultats déjà obtenus. Les mentions « à préciser » signalent les conditions qui restent à fixer avant la qualification.
 \subsection{Identification, documents et partage}
 \reqEF{EF-01}{Présentation du rédacteur}{Le système doit permettre à un rédacteur de se présenter au moyen d'un nom et d'une adresse e-mail.}{Le nom et l'adresse sont saisis ; un code envoyé par e-mail vérifie la possession de l'adresse avant l'activation d'une identité métier stable. Ce code est une précision décidée par le porteur, non une obligation formulée dans le sujet.}
 \reqEF{EF-02}{Création d’un document}{Le système doit permettre à un rédacteur de créer un document textuel.}{Après une création réussie, un document identifiable peut être ouvert et édité.}
@@ -133,148 +133,122 @@ Le diagramme suivant présente les fonctions accessibles aux acteurs.
 
 \section{Scénarios ou cas d'utilisation structurés}
 \subsection{SC-01 --- Créer et partager un document}
-\begin{longtable}{@{}L{36mm}L{116mm}@{}}
+\begin{longtable}{@{}L{30mm}L{126mm}@{}}
 \toprule
-Acteur principal & Rédacteur qui crée le document.\\
-Acteurs secondaires & Second rédacteur, auquel le créateur partage le document.\\
-Précondition & Les deux rédacteurs sont identifiés par leur nom et leur adresse e-mail ; le document à créer n'existe pas encore.\\
-Scénario & 1. Le rédacteur principal crée un document textuel.\newline
-2. Il désigne le second rédacteur et lui accorde l'accès au document.\newline
-3. Le second rédacteur ouvre le document partagé.\newline
-Variantes : l'identité du destinataire est ambiguë ou inexistante, les données saisies sont invalides, ou la création échoue. Le comportement attendu dans ces cas reste à préciser. En parallèle, d'autres documents peuvent être créés ou ouverts sans effet de bord sur celui-ci.\\
-Post-condition & Le document existe et les deux rédacteurs concernés peuvent y accéder.\\
+Acteur principal & Rédacteur créateur.\\
+Acteurs secondaires & Second rédacteur invité.\\
+Précondition & Aucun document de ce nom n’existe.\\
+Scénario & 1. Le rédacteur crée un document textuel.\newline 2. Il partage l’accès ; le second rédacteur l’ouvre.\newline Variantes : adresse ambiguë ou inconnue, saisie invalide ou échec de création (traitement à préciser). D’autres documents restent indépendants.\\
+Post-condition & Le document existe et les deux rédacteurs autorisés y accèdent.\\
 \bottomrule
 \end{longtable}
 \subsection{SC-02 --- Écrire simultanément au même endroit}
-\begin{longtable}{@{}L{36mm}L{116mm}@{}}
+\begin{longtable}{@{}L{30mm}L{126mm}@{}}
 \toprule
-Acteur principal & Rédacteurs qui éditent simultanément le même document.\\
-Acteurs secondaires & Autres participants au document, qui reçoivent les modifications et les positions d'écriture.\\
-Précondition & La version active de la branche est OUVERTE aux rédacteurs ; leur crédit est disponible et aucun n'est bloqué ; au moins deux rédacteurs éditent la même zone.\\
-Scénario & 1. Les rédacteurs soumettent leurs modifications concurrentes.\newline
-2. Le système détermine lesquelles sont acceptées et diffuse les changements ainsi que les positions.\newline
-3. Après l'arrêt des éditions et le traitement des échanges, les participants voient le même document.\newline
-Variantes : crédit épuisé, déconnexion ou répétition d'une requête après perte de réponse ; les règles d'acceptation et de reprise restent à valider. En parallèle, d'autres rédacteurs peuvent éditer, créer des liens et télécharger le document.\\
-Post-condition & Les modifications acceptées sont intégrées, les vues convergent et les crédits restent conformes.\\
+Acteur principal & Rédacteurs du même document.\\
+Acteurs secondaires & Autres participants recevant changements et positions.\\
+Précondition & Version active OUVERTE, crédit disponible, aucun blocage ; deux personnes éditent la même zone.\\
+Scénario & 1. Les rédacteurs soumettent des modifications simultanées.\newline 2. Le système contrôle et diffuse modifications et positions.\newline 3. Après traitement, les vues convergent.\newline Variantes : crédit épuisé, coupure ou retransmission ; règles à valider. D’autres éditions et téléchargements continuent.\\
+Post-condition & Les modifications acceptées sont conservées, les vues convergent et le crédit reste conforme.\\
 \bottomrule
 \end{longtable}
-\textit{Traçabilité :} EU-02, EU-05 ; EF-05 à EF-08, EF-23 à EF-26 ; RM-02, RM-04.
 \subsection{SC-03 --- Consulter puis restaurer une version}
-\begin{longtable}{@{}L{36mm}L{116mm}@{}}
+\begin{longtable}{@{}L{30mm}L{126mm}@{}}
 \toprule
 Acteur principal & Propriétaire de la branche source.\\
-Acteurs secondaires & Rédacteurs autorisés sur la branche source.\\
-Précondition & Le propriétaire peut consulter la version et la révision choisies dans la branche source.\\
-Scénario & 1. Le propriétaire choisit une version et une révision antérieures et consulte leur contenu.\newline
-2. Il demande la restauration ; le système crée une branche distincte et sa première version éditable à partir de ce contenu.\newline
-3. Le propriétaire attribue les accès à la nouvelle branche.\newline
-Variantes : la source est absente ou inaccessible ; la création échoue et ne doit pas altérer la branche source. En parallèle, les rédacteurs peuvent continuer sur la branche source sans modifier la nouvelle.\\
-Post-condition & La branche source et son historique restent inchangés ; la nouvelle branche conserve sa provenance et évolue indépendamment.\\
+Acteurs secondaires & Rédacteurs autorisés sur la source.\\
+Précondition & Le propriétaire peut lire la version et la révision choisies.\\
+Scénario & 1. Il consulte une version et une révision.\newline 2. La restauration crée une branche et une première version indépendantes depuis ce contenu.\newline 3. Il attribue les accès.\newline Variantes : source inaccessible ou échec, sans altérer la source. Les rédacteurs peuvent continuer sur celle-ci.\\
+Post-condition & La source et son historique restent inchangés ; la nouvelle branche conserve sa provenance.\\
 \bottomrule
 \end{longtable}
 \subsection{SC-04 --- Télécharger après une correction sans changer de lien}
-\begin{longtable}{@{}L{36mm}L{116mm}@{}}
+\begin{longtable}{@{}L{30mm}L{126mm}@{}}
 \toprule
-Acteur principal & Visiteur anonyme qui utilise le lien de téléchargement.\\
-Acteurs secondaires & Créateur du lien et rédacteur qui corrige le document.\\
-Précondition & Un lien valide non épuisé existe ; le document est à l'état V1.\\
-Scénario & 1. Le rédacteur effectue une correction acceptée, qui produit l'état V2.\newline
-2. Le visiteur utilise le lien initial.\newline
-3. Le système autorise la demande et fournit un PDF cohérent correspondant à un état de référence qui inclut la correction.\newline
-Variantes : une correction survient pendant la génération du PDF ; le fichier doit correspondre à un instant de référence défini. En cas d'échec du transfert, le traitement de la consommation dépend de la règle à valider. En parallèle, de nouvelles éditions et d'autres demandes de téléchargement peuvent avoir lieu.\\
-Post-condition & Le visiteur reçoit le PDF actuel par le même lien ; la capacité est consommée selon une règle définie.\\
+Acteur principal & Visiteur anonyme.\\
+Acteurs secondaires & Créateur du lien et rédacteur.\\
+Précondition & Lien valide non épuisé ; une correction est acceptée.\\
+Scénario & 1. Le rédacteur corrige le document.\newline 2. Le visiteur reprend le même lien.\newline 3. Le système fournit un PDF cohérent avec l’état de référence défini, incluant la correction.\newline Variantes : correction pendant la génération ou échec de transfert ; règle de consommation à préciser.\\
+Post-condition & Le lien reste stable et fournit le PDF correspondant à l’état retenu.\\
 \bottomrule
 \end{longtable}
-\textit{Traçabilité :} EU-04, EU-06 ; EF-12 à EF-19 ; RM-01, RM-03.
 \subsection{SC-05 --- Distribuer le dernier exemplaire sous accès concurrents}
-\begin{longtable}{@{}L{36mm}L{116mm}@{}}
+\begin{longtable}{@{}L{30mm}L{126mm}@{}}
 \toprule
-Acteur principal & Visiteur qui demande le dernier téléchargement disponible.\\
-Acteurs secondaires & Autres visiteurs concurrents, créateur du lien, rédacteurs et visiteurs déjà en attente.\\
-Précondition & Le lien possède un seul téléchargement restant.\\
-Scénario & 1. Plusieurs demandes arrivent simultanément ; au plus une consomme le dernier téléchargement.\newline
-2. Le lien devient épuisé ; les autres visiteurs en sont informés et le créateur reçoit un e-mail.\newline
-Variantes : le visiteur autorisé abandonne, la génération du PDF échoue ou l'e-mail ne peut être remis ; les politiques correspondantes restent à définir. En parallèle, les rédacteurs poursuivent les corrections et des visiteurs peuvent déjà attendre.\\
-Post-condition & Aucun dépassement n'a lieu ; les visiteurs présents sont informés de l'épuisement et la notification au créateur est déclenchée. La reprise d'une tentative échouée suit la règle de consommation retenue.\\
+Acteur principal & Visiteur demandant le dernier exemplaire.\\
+Acteurs secondaires & Visiteurs concurrents, créateur, rédacteurs et personnes en attente.\\
+Précondition & Un téléchargement reste sur le lien.\\
+Scénario & 1. Plusieurs demandes arrivent ; une seule au plus consomme le dernier exemplaire.\newline 2. Le lien est épuisé ; les visiteurs restants sont informés et le courriel au créateur est déclenché.\newline Variantes : abandon, échec de génération ou de courriel ; règles à fixer. Les rédacteurs poursuivent leurs corrections.\\
+Post-condition & Aucun dépassement ; les visiteurs sont informés. La reprise suit la règle de consommation à valider.\\
 \bottomrule
 \end{longtable}
 \subsection{SC-06 --- Épuiser le crédit depuis plusieurs appareils}
-\begin{longtable}{@{}L{36mm}L{116mm}@{}}
+\begin{longtable}{@{}L{30mm}L{126mm}@{}}
 \toprule
-Acteur principal & Rédacteur qui écrit depuis deux appareils.\\
-Acteurs secondaires & Autres rédacteurs qui modifient les mêmes documents.\\
-Précondition & Le même rédacteur est reconnu sur les deux appareils et dispose d'un faible crédit restant.\\
-Scénario & 1. Les deux appareils soumettent simultanément des modifications.\newline
-2. Le système n'accepte que les écritures compatibles avec le crédit restant ; le total quotidien ne dépasse pas 10\,000 caractères.\newline
-3. Le crédit est rechargé au début de la période quotidienne suivante.\newline
-Variantes : une opération dépasse le reliquat, une demande arrive au changement de journée ou une autre adresse est utilisée ; le traitement dépend des règles de comptage, de calendrier et d'identification. En parallèle, d'autres rédacteurs modifient les mêmes documents.\\
-Post-condition & Le crédit n'est pas négatif, les écritures refusées ne sont pas annoncées comme acceptées et la recharge s'applique à la période suivante.\\
+Acteur principal & Rédacteur utilisant deux appareils.\\
+Acteurs secondaires & Autres rédacteurs des mêmes documents.\\
+Précondition & Même identité sur les deux appareils ; faible crédit restant.\\
+Scénario & 1. Les appareils soumettent des modifications simultanées.\newline 2. Le système n’accepte que celles compatibles avec le reliquat de 10\,000 caractères.\newline 3. Le crédit est rechargé à la période suivante.\newline Variantes : dépassement, changement de jour ou autre adresse ; règles à préciser.\\
+Post-condition & Aucun dépassement ; les refus ne sont pas présentés comme acceptés.\\
 \bottomrule
 \end{longtable}
 \subsection{SC-07 --- Détecter un abus et observer le blocage}
-\begin{longtable}{@{}L{36mm}L{116mm}@{}}
+\begin{longtable}{@{}L{30mm}L{126mm}@{}}
 \toprule
-Acteur principal & Rédacteur qui tente de dépasser les limites de façon répétée.\\
-Acteurs secondaires & Représentant de l'association qui consulte l'état des personnes bloquées.\\
-Précondition & Les limites sont atteintes et les règles de détection ainsi que la durée du blocage sont définies.\\
-Scénario & 1. Les tentatives répétées déclenchent la détection d'un abus.\newline
-2. Le système applique un blocage temporaire et l'association peut le voir dans l'état de l'application.\newline
-3. À l'expiration, le blocage cesse de s'appliquer.\newline
-Variantes : le rédacteur utilise plusieurs appareils ou identités déclarées ; les garanties dépendent du modèle d'identification. En parallèle, les autres personnes poursuivent leur usage normal.\\
-Post-condition & Le blocage a expiré ; les quotas continuent de s'appliquer indépendamment du blocage.\\
+Acteur principal & Rédacteur aux tentatives répétées.\\
+Acteurs secondaires & Association consultant les blocages.\\
+Précondition & Limites, détection et durée de blocage définies.\\
+Scénario & 1. Les tentatives répétées déclenchent un blocage temporaire.\newline 2. L’association consulte l’état.\newline 3. Le blocage cesse à son échéance.\newline Variantes : plusieurs appareils ou identités ; portée de l’identification à préciser. Les autres utilisateurs continuent.\\
+Post-condition & Le blocage a expiré ; les quotas restent indépendants.\\
 \bottomrule
 \end{longtable}
-\textit{Traçabilité :} EU-05, EU-07 ; EF-28, EF-29, EF-33.
 \subsection{SC-08 --- Publier au pic et consulter l'état}
-\begin{longtable}{@{}L{36mm}L{116mm}@{}}
+\begin{longtable}{@{}L{30mm}L{126mm}@{}}
 \toprule
-Acteur principal & Visiteur qui utilise le lien pendant le pic de publication.\\
-Acteurs secondaires & Association qui consulte l'état, 14\,999 autres visiteurs et 300 rédacteurs actifs.\\
-Précondition & Le lien est annoncé pour 500 exemplaires ; le document peut encore être corrigé et le système est déployé.\\
-Scénario & 1. 12\,000 visiteurs arrivent au cours de la première minute tandis que les rédacteurs poursuivent leur travail.\newline
-2. Chaque visiteur reçoit un état : téléchargement immédiat, attente ou épuisement.\newline
-3. L'association consulte les documents ouverts, les liens et leurs capacités restantes, ainsi que les personnes bloquées.\newline
-4. Après la dernière consommation, les visiteurs encore présents sont informés de l'épuisement.\newline
-Variantes : les arrivées sont plus concentrées que la moyenne, les visiteurs réessaient ou la génération ralentit ; le profil et les résultats doivent être consignés. En parallèle, l'historique, les notifications et la supervision restent sollicités.\\
-Post-condition & Les limites de téléchargement, d'édition et de crédit sont respectées ; chaque visiteur reçoit une réponse selon les seuils fixés ; les traitements inutiles pour le lien épuisé cessent.\\
+Acteur principal & Visiteur pendant le pic.\\
+Acteurs secondaires & Association, 14\,999 visiteurs et 300 rédacteurs actifs.\\
+Précondition & Lien annoncé pour 500 exemplaires ; corrections encore possibles.\\
+Scénario & 1. 12\,000 visiteurs arrivent durant la première minute pendant que les rédacteurs travaillent.\newline 2. Chacun reçoit un état : téléchargement, attente ou épuisement.\newline 3. L’association consulte documents, liens, restes et blocages.\newline 4. Après épuisement, les visiteurs présents sont informés.\newline Variantes : rafales, nouvelles tentatives ou génération lente ; profil à mesurer.\\
+Post-condition & Quotas et crédits sont respectés ; chaque visiteur reçoit une réponse et les traitements inutiles cessent après épuisement.\\
 \bottomrule
 \end{longtable}
 
 
-\section{Vérification et traçabilité des contraintes}
-La vérification combine une argumentation sur les mécanismes choisis et des essais reproductibles. Les tests établissent un résultat dans les conditions exécutées ; ils ne démontrent pas seuls une garantie universelle. Un résultat identique sur tous les navigateurs ne suffit pas à établir la conservation de chaque modification acceptée.
-\begin{longtable}{@{}L{15mm}L{31mm}L{65mm}L{38mm}@{}}
-\toprule Source & Exigences principales & Vérification prévue & Preuves attendues\\\midrule\endhead
-C1 & RM-01 ; EF-16 ; ENF-01 & V-01 : capacité 1 puis 500 ; demandes concurrentes au-delà du plafond ; nouvelles tentatives. & Décisions, consommations et refus ; zéro dépassement ; tirage atteignable.\\
-C2 & RM-02 ; EF-05, EF-06 ; ENF-02, ENF-03 & V-02 : éditions au même endroit, insertions, suppressions et remplacements ; arrêt et comparaison. & Opérations acceptées, oracle d'intégration et copies finales.\\
-C3 & RM-03 ; EF-14, EF-15 ; ENF-04 & V-03 : lien créé avant correction ; usage après correction ; édition pendant export. & Révision de référence, PDF et comparaison du texte.\\
-C4 & RM-04 ; EF-23 à EF-27 ; ENF-05 & V-04 : consommation concurrente sur plusieurs appareils puis bascule du jour. & Décompte par identité/journée, acceptations et refus.\\
-C5 & EF-17 à EF-21 ; ENF-07, ENF-08 & V-05 : 15\,000 visiteurs, 12\,000 en première minute ; 300 rédacteurs actifs. & Profil d'arrivée, réponses réconciliées, latences, erreurs et invariants P0.\\
-C6 & EF-21 ; ENF-09, ENF-10 & V-06 : épuisement avec visiteurs encore présents ou en attente. & Délais d'information et absence de nouvelle distribution.\\\bottomrule
-\end{longtable}
 
-Les fonctions restantes font l'objet de vérifications ciblées : création/partage (EF-01 à EF-04), présence et historique (EF-07 à EF-11), notification (EF-22), abus et blocage (EF-28, EF-29), supervision (EF-30 à EF-33). Les ENF-11 à ENF-24 appellent des revues de sécurité, d'infrastructure et de livrables. La future matrice détaillée associera à chaque identifiant un test exécuté et une preuve conservée.
+%\section{Vérification et traçabilité des contraintes}
+%La vérification combine une argumentation sur les mécanismes choisis et des essais reproductibles. Les tests établissent un résultat dans les conditions exécutées ; ils ne démontrent pas seuls une garantie universelle. Un résultat identique sur tous les navigateurs ne suffit pas à établir la conservation de chaque modification acceptée.
+%\begin{longtable}{@{}L{15mm}L{31mm}L{65mm}L{38mm}@{}}
+%\toprule Source & Exigences principales & Vérification prévue & Preuves attendues\\\midrule\endhead
+%C1 & RM-01 ; EF-16 ; ENF-01 & V-01 : capacité 1 puis 500 ; demandes concurrentes au-delà du plafond ; nouvelles tentatives. & Décisions, consommations et refus ; zéro dépassement ; tirage atteignable.\\
+%C2 & RM-02 ; EF-05, EF-06 ; ENF-02, ENF-03 & V-02 : éditions au même endroit, insertions, suppressions et remplacements ; arrêt et comparaison. & Opérations acceptées, oracle d'intégration et copies finales.\\
+%C3 & RM-03 ; EF-14, EF-15 ; ENF-04 & V-03 : lien créé avant correction ; usage après correction ; édition pendant export. & Révision de référence, PDF et comparaison du texte.\\
+%C4 & RM-04 ; EF-23 à EF-27 ; ENF-05 & V-04 : consommation concurrente sur plusieurs appareils puis bascule du jour. & Décompte par identité/journée, acceptations et refus.\\
+%C5 & EF-17 à EF-21 ; ENF-07, ENF-08 & V-05 : 15\,000 visiteurs, 12\,000 en première minute ; 300 rédacteurs actifs. & Profil d'arrivée, réponses réconciliées, latences, erreurs et invariants P0.\\
+%C6 & EF-21 ; ENF-09, ENF-10 & V-06 : épuisement avec visiteurs encore présents ou en attente. & Délais d'information et absence de nouvelle distribution.\\\bottomrule
+%\end{longtable}
 
-\section{Questions ouvertes et objectifs à valider}\label{sec:questions}
-Les points suivants n'empêchent pas l'extraction des besoins, mais empêchent de figer certaines conditions d'acceptation. Ils seront résolus par des décisions datées, liées aux exigences concernées.
-\begin{longtable}{@{}L{13mm}L{86mm}L{54mm}@{}}
-\toprule ID & Question à trancher & Incidence\\\midrule\endhead
-Q-01 & Un téléchargement est-il consommé à la réservation, à la remise d'un accès au fichier, au début du transfert ou à sa réception complète ? Une nouvelle tentative compte-t-elle à nouveau ? & Plafond exact, abandons, stockage S3 et tests de distribution.\\
-Q-02 & À quel événement une modification est-elle « acceptée » ? & Preuve d'absence de perte et gestion des réponses réseau perdues.\\
-Q-03 & Quel instant précis représente T1 : arrivée de la demande, décision d'autorisation ou capture du contenu ? & PDF actuel et cohérent pendant l'édition.\\
-Q-04 & Quels caractères sont décomptés, avec quelle unité Unicode ? Quel coût retenir pour la copie initiale d'une nouvelle version ou branche ? & Crédit quotidien et équité du comptage ; les autres opérations ont des coûts proposés au chapitre 3.\\
-Q-05 & La journée UTC est proposée pour le quota du rédacteur : à confirmer. Elle reste distincte de la journée locale du propriétaire utilisée pour le versionnage. & Bascule de période et limite quotidienne de 10\,000 caractères imposée par C4.\\
-Q-06 & Décision : nom et e-mail, code de vérification et identité métier stable entre sessions. Reste à définir la reprise d'accès et le traitement de plusieurs adresses d'une même personne. & Crédit commun entre appareils ; la possession d'une adresse ne prouve pas l'unicité d'une personne.\\
-Q-07 & Quels seuils, fenêtre temporelle, durée et périmètre déterminent l'abus et le blocage ? & EF-28 et EF-29 vérifiables.\\
-Q-08 & Décision : lecture sur la branche, écriture sur sa version active ouverte, restauration par le propriétaire vers une nouvelle branche ; les droits révoqués le restent. Restent à préciser la création des liens et l'accès à la supervision. & Contrôle d'accès côté serveur et matrice de droits au chapitre 3.\\
-Q-09 & Décision : révisions techniques dans une version métier, versions successives dans une branche, restauration indépendante. Restent à fixer la rétention et le coût de la copie initiale. & Provenance et clôture décrites au chapitre 3.\\
-Q-10 & « Version ouverte » désigne ici l'état éditable d'une branche. Que signifient encore « document ouvert » dans la supervision, « lien actif » et « personne présente » ? & Éviter de confondre état métier, présence en ligne et état de diffusion.\\
-Q-11 & Quels seuils chiffrés pour « presque aussitôt », « rapidement » et le temps de réponse sous charge ? & Qualification des performances.\\
-Q-12 & Quel comportement lorsque le PDF ou l'e-mail échoue ? Quelle tolérance aux doublons d'e-mail ? & Cohérence entre consommation, fichier remis et notification.\\
-Q-13 & Quelle forme de pic à l'intérieur de la première minute et quelle durée d'observation après celle-ci ? & Reproductibilité des essais ; 200 arrivées/s est une moyenne, pas un maximum.\\
-Q-14 & Quels traitements cessent après épuisement et que deviennent les travaux déjà autorisés ? & Interprétation de C6 sans interrompre l'édition ni les autres liens.\\
-Q-15 & Quelles bonnes pratiques précises des autres cours et quel budget de travail faut-il retenir ? & Critères de revue et choix réalisables dans le plan AWS imposé.\\\bottomrule
-\end{longtable}
+%Les fonctions restantes font l'objet de vérifications ciblées : création/partage (EF-01 à EF-04), présence et historique (EF-07 à EF-11), notification (EF-22), abus et blocage (EF-28, EF-29), supervision (EF-30 à EF-33). Les ENF-11 à ENF-24 appellent des revues de sécurité, d'infrastructure et de livrables. La future matrice détaillée associera à chaque identifiant un test exécuté et une preuve conservée.
+
+%\section{Questions ouvertes et objectifs à valider}\label{sec:questions}
+%Les points suivants n'empêchent pas l'extraction des besoins, mais empêchent de figer certaines conditions d'acceptation. Ils seront résolus par des décisions datées, liées aux exigences concernées.
+%\begin{longtable}{@{}L{13mm}L{86mm}L{54mm}@{}}
+%\toprule ID & Question à trancher & Incidence\\\midrule\endhead
+%Q-01 & Un téléchargement est-il consommé à la réservation, à la remise d'un accès au fichier, au début du transfert ou à sa réception complète ? Une nouvelle tentative compte-t-elle à nouveau ? & Plafond exact, abandons, stockage S3 et tests de distribution.\\
+%Q-02 & À quel événement une modification est-elle « acceptée » ? & Preuve d'absence de perte et gestion des réponses réseau perdues.\\
+%Q-03 & Quel instant précis représente T1 : arrivée de la demande, décision d'autorisation ou capture du contenu ? & PDF actuel et cohérent pendant l'édition.\\
+%Q-04 & Quels caractères sont décomptés, avec quelle unité Unicode ? Quel coût retenir pour la copie initiale d'une nouvelle version ou branche ? & Crédit quotidien et équité du comptage ; les autres opérations ont des coûts proposés au chapitre 3.\\
+%Q-05 & La journée UTC est proposée pour le quota du rédacteur : à confirmer. Elle reste distincte de la journée locale du propriétaire utilisée pour le versionnage. & Bascule de période et limite quotidienne de 10\,000 caractères imposée par C4.\\
+%Q-06 & Décision : nom et e-mail, code de vérification et identité métier stable entre sessions. Reste à définir la reprise d'accès et le traitement de plusieurs adresses d'une même personne. & Crédit commun entre appareils ; la possession d'une adresse ne prouve pas l'unicité d'une personne.\\
+%Q-07 & Quels seuils, fenêtre temporelle, durée et périmètre déterminent l'abus et le blocage ? & EF-28 et EF-29 vérifiables.\\
+%Q-08 & Décision : lecture sur la branche, écriture sur sa version active ouverte, restauration par le propriétaire vers une nouvelle branche ; les droits révoqués le restent. Restent à préciser la création des liens et l'accès à la supervision. & Contrôle d'accès côté serveur et matrice de droits au chapitre 3.\\
+%Q-09 & Décision : révisions techniques dans une version métier, versions successives dans une branche, restauration indépendante. Restent à fixer la rétention et le coût de la copie initiale. & Provenance et clôture décrites au chapitre 3.\\
+%Q-10 & « Version ouverte » désigne ici l'état éditable d'une branche. Que signifient encore « document ouvert » dans la supervision, « lien actif » et « personne présente » ? & Éviter de confondre état métier, présence en ligne et état de diffusion.\\
+%Q-11 & Quels seuils chiffrés pour « presque aussitôt », « rapidement » et le temps de réponse sous charge ? & Qualification des performances.\\
+%Q-12 & Quel comportement lorsque le PDF ou l'e-mail échoue ? Quelle tolérance aux doublons d'e-mail ? & Cohérence entre consommation, fichier remis et notification.\\
+%Q-13 & Quelle forme de pic à l'intérieur de la première minute et quelle durée d'observation après celle-ci ? & Reproductibilité des essais ; 200 arrivées/s est une moyenne, pas un maximum.\\
+%Q-14 & Quels traitements cessent après épuisement et que deviennent les travaux déjà autorisés ? & Interprétation de C6 sans interrompre l'édition ni les autres liens.\\
+%Q-15 & Quelles bonnes pratiques précises des autres cours et quel budget de travail faut-il retenir ? & Critères de revue et choix réalisables dans le plan AWS imposé.\\\bottomrule
+%\end{longtable}
 
 \textbf{Objectifs de mesure proposés, non validés.} Pour rendre les termes qualitatifs vérifiables, une première discussion peut partir des valeurs ci-dessous. Ces valeurs ne proviennent pas du sujet et ne constituent pas encore des engagements.
 \begin{table}[H]\small

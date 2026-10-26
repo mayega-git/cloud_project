@@ -1,17 +1,18 @@
 # Cahier de conception — Éditeur de documents partagé
 
-Le dossier rassemble l'état de l'art, l'analyse des exigences, la conception du crédit, le cadrage de l'historique et les résultats rapportés de l'intégration locale. Il s'appuie sur le sujet, le cours d'ingénierie des exigences et les décisions complémentaires du porteur.
+Le dossier rassemble l'état de l'art, l'analyse des exigences, la conception de l'application, le premier déploiement AWS et les résultats d'essais rapportés. Il s'appuie sur le sujet, les cours fournis et les décisions complémentaires du porteur.
 
-Le cahier est rédigé en français, en LaTeX, avec une présentation en noir et blanc. Les diagrammes UML sont maintenus en PlantUML. Etherpad est retenu pour le MVP local ; les garanties prioritaires et la cible AWS restent à qualifier.
+Le cahier est rédigé en français, en LaTeX, avec une présentation en noir et blanc. Les diagrammes UML sont maintenus en PlantUML. Etherpad est retenu pour l'édition ; une première pile AWS est déployée en `eu-north-1`. Les garanties prioritaires, la charge et le coût restent à qualifier.
 
 ## Contenu
 
 - `main.tex` : entrée du document.
 - `chapitres/01-etat-art.tex` : approches OT/CRDT, existants et comparaison sourcée.
 - `chapitres/02-analyse.tex` : parties prenantes, exigences, scénarios, traçabilité et diagrammes fonctionnels sans nom de technologie.
-- `chapitres/03-conception.tex` : crédit quotidien, branches, versions métier, permissions et clôture.
-- `chapitres/04-implementation-resultats.tex` : choix de la stack, état réel du MVP, correspondance technique et preuves restantes.
+- `chapitres/03-conception.tex` : architecture logique et AWS, crédit quotidien, branches, versions métier, permissions et clôture.
+- `chapitres/04-implementation-resultats.tex` : choix de la stack, CI/CD, pratiques AWS, premier déploiement et limites.
 - `chapitres/05-references.tex` : références des pièces fournies et sources officielles.
+- `chapitres/06-annexes.tex` : ancienne source de l'API et du rapport de tests, conservée localement mais exclue de `main.pdf`.
 - `diagrammes/*.puml` : sources UML et style monochrome commun.
 - `figures/*.png` : rendus PlantUML, dont les figures incluses dans le rapport, pour compiler sans installer PlantUML.
 - `main.pdf` : unique PDF du cahier, généré depuis `main.tex`.

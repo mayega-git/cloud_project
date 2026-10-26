@@ -1,10 +1,10 @@
-\chapter{Implémentation locale et premiers résultats}
+\chapter{Implémentation et premier déploiement AWS}
 
 \section{Choix technologiques et compromis de réalisation}
 
 Le tableau couvre le parcours local et les besoins du projet encore à réaliser. « Coût » distingue licence, infrastructure, exploitation, développement et maintenance ; aucun tarif AWS n'est mesuré à cette étape. Les états indiquent ce que le code et les essais de cette livraison permettent réellement d'affirmer.
 
-\begingroup\small
+\begingroup\small\sloppy
 \begin{longtable}{@{}L{21mm}@{\hspace{1mm}}L{28mm}@{\hspace{1mm}}L{29mm}@{\hspace{1mm}}L{27mm}@{\hspace{1mm}}L{24mm}@{\hspace{1mm}}L{17mm}@{}}
 \caption{Choix technologiques de l'application et compromis.}\label{tab:stack}\\
 \toprule
@@ -49,69 +49,55 @@ Déploiement local & Compose, PostgreSQL, backend, Etherpad et passerelle. & Dé
 \addlinespace
 Validation et observabilité & Tests Node, PostgreSQL et Etherpad ; journaux existants. & Éprouve des courses et les droits réels. & Fautes, charge et métriques non couvertes. & Temps d'exécution et maintenance des tests. & Partiel. \\
 \addlinespace
-Sauvegarde et AWS & Sauvegarde, supervision et services AWS à déterminer. & Respect possible de la région et de S3. & Aucune architecture ou restauration testée. & Coût de stockage et d'exploitation à estimer. & Prévu. \\
+Sauvegarde et AWS & CloudFormation, EC2, ALB, RDS, S3 privé et Secrets Manager. & Pile créée en eu-north-1 ; données SQL partagées. & RDS mono-zone ; S3 inutilisé ; sauvegarde et restauration non éprouvées. & EC2, ALB, stockage, base, secrets, IPv4 et trafic à mesurer. & Déployé ; coût à relever. \\
 \addlinespace
 Rapport & LaTeX et PlantUML. & Sources modifiables et génération reproductible. & Dépendances et inspection visuelle nécessaires. & Temps de compilation et relecture. & Existant vérifié. \\
 \bottomrule
 \end{longtable}
 \endgroup
 
-Un pad par version simplifie l'intégration à Etherpad dans ce périmètre sans fusion, mais ne constitue aucune preuve de capacité. Il faudra mesurer le nombre de pads actifs, les révisions, le stockage et les clôtures simultanées. Git n'est pas introduit : le besoin n'inclut ni fusion ni rebase, et sa synchronisation avec les pads ajouterait un second état à maintenir. Il ne remplacerait ni les droits ni la barrière de gel ; cette décision ne suppose aucune infériorité intrinsèque de performance de Git. Réutiliser la stack limite les nouvelles intégrations, l'apprentissage et l'exploitation, sans rendre gratuits les licences, l'hébergement, les sauvegardes ou la maintenance.
+Un pad par version évite les fusions, mais sa capacité reste à mesurer. Git n’est pas retenu faute de besoin de fusion ; il ajouterait une représentation à synchroniser sans remplacer les droits ni le gel. La réutilisation de la stack réduit l’intégration et l’exploitation, pas les coûts d’hébergement, de sauvegarde ou de maintenance.
 
-\section{Organisation et interfaces de cette étape}
+\section{Bonnes pratiques AWS appliquées}
 
-Le code contient maintenant un backend Fastify, des migrations pour le schéma métier \texttt{business} de PostgreSQL, un plugin \texttt{ep\_business} et une image Etherpad 3.3.6 construite localement. Les anciennes données de pads demeurent intactes, mais le nouveau parcours métier ne donne pas accès aux pads sans version enregistrée. Les sessions historiques de développement utilisent un cookie opaque et un hachage persistant avec adresse déclarée. Leur création reste limitée au mode local. Le nouveau parcours vérifie l'adresse par code e-mail avec Better Auth ; une session métier vérifiée conserve l'identifiant utilisateur stable, y compris pour une adresse déjà connue. Les autorisations restent dans le backend.
+Le tableau relie les recommandations du cours à la configuration décrite dans \texttt{application/infra/aws.yaml}. « Présent » décrit le modèle ou l'état rapporté ; cela ne signifie pas que chaque contrôle a été vérifié sur AWS.
 
-\texttt{POST /projects} crée le projet d'édition (représenté par la table historique 	exttt{documents}), sa première branche, sa version ouverte et son pad. Les routes de lecture exposent les branches, les versions et le contenu d'une révision autorisée. Le propriétaire vérifié peut inviter une adresse encore inconnue, renvoyer ou annuler le lien, puis modifier ou révoquer un droit après acceptation. Une invitation en attente ne donne aucun accès. Le jeton n'est conservé dans la table que sous forme d'empreinte ; le fragment du lien n'est pas envoyé dans l'URL des requêtes HTTP. \texttt{POST /branches/:id/closures} et \texttt{POST /versions/:id/restorations} retournent un identifiant de traitement et le statut HTTP 202 ; les routes de suivi distinguent traitement en cours et résultat terminé. Une clé d'idempotence est exigée pour ces créations. Le contrat d'API complet reste à rédiger.
-
-La passerelle locale réserve les API administratives Etherpad aux composants internes. Le plugin consulte le backend pour les connexions et les messages d'écriture ; connaître l'identifiant du pad ne suffit pas pour y accéder par le navigateur. Le code et les commandes de construction sont décrits dans \texttt{application/README.md}. Les visiteurs de PDF n'utilisent pas l'éditeur.
-
-\subsection{Points techniques à vérifier pour le crédit}
-
-Le modèle du chapitre 3 compte les points de code Unicode. Il faut distinguer, dans l'implémentation, les octets, les unités UTF-16, les points de code et les graphèmes visibles : \texttt{String.length} compte des unités UTF-16 et ne mesure donc pas directement le crédit. Le décodage des changements d'Etherpad devra isoler le texte réellement inséré des éléments techniques. Il faudra aussi vérifier toute conversion des fins de ligne CRLF/LF avant le calcul, sans changer silencieusement le texte ou les positions d'écriture.
-
-La correspondance entre l'identifiant stable de l'utilisateur (\texttt{user\_id}), ses sessions et l'identifiant d'auteur d'Etherpad (\texttt{authorId}) reste à établir pour plusieurs connexions. Les hooks d'Etherpad, la persistance et l'ordre des acquittements devront être étudiés avant de placer le refus et la confirmation d'une écriture \cite{etherpad-hooks}. PostgreSQL, Valkey et \texttt{rate-limiter-flexible} sont des candidats pour certaines règles de crédit ou de protection contre les abus, sans assemblage validé. Un appel \texttt{consume()} suivi d'une sauvegarde ne résout pas l'atomicité entre débit et écriture.
-
-\section{Correspondance entre conception et code}\label{sec:implementation-historique}
-
-Une branche et ses permissions sont des données métier. Chaque version utilise un pad Etherpad distinct ; ses révisions techniques restent dans ce pad. Le passage à V2 copie le contenu final de V1 sans recopier son historique. Pour restaurer une révision antérieure, le service copie d'abord le pad source avec son historique vers un pad temporaire, applique \texttt{restoreRevision} à cette \emph{copie}, puis crée le pad définitif de la nouvelle branche. Le pad source reste intact. La comparaison du texte et du HTML a été testée sur une révision avec gras et italique ; elle ne prouve pas encore la fidélité de tous les attributs possibles.
-
-\begingroup\small
-\begin{longtable}{@{}L{29mm}@{\hspace{1.5mm}}L{36mm}@{\hspace{1.5mm}}L{38mm}@{\hspace{1.5mm}}L{25mm}@{\hspace{1.5mm}}L{23mm}@{}}
-\caption{Mécanismes implémentés et preuves restantes.}\label{tab:correspondance-historique}\\
-\toprule
-Mécanisme & Support Etherpad 3.3.6 & Adaptation locale & État & Preuve restante \\
-\midrule
-\endfirsthead
-\toprule
-Mécanisme & Support Etherpad 3.3.6 & Adaptation locale & État & Preuve restante \\
-\midrule
-\endhead
-Branches et versions & Pads et révisions \cite{etherpad-api}. & Tables métier, contraintes d'unicité, copie du pad final. & Intégré ; essai V1 vers V2 réussi. & Reprises aux pannes injectées. \\
+\begingroup\small\sloppy
+\setlength{\tabcolsep}{0pt}
+\begin{longtable}{@{}L{22mm}@{\hspace{1mm}}L{31mm}@{\hspace{1mm}}L{50mm}@{\hspace{1mm}}L{51mm}@{}}
+\caption{Infrastructure AWS : pratique du cours, mise en place et limites.}\label{tab:aws-controles}\\
+\toprule Élément & Pratique du cours & Mise en place observée & État ou limite \\
+\midrule\endfirsthead
+\toprule Élément & Pratique du cours & Mise en place observée & État ou limite \\
+\midrule\endhead
+Région et VPC & Choisir une région et isoler le réseau ; distinguer zones et régions. \cite[p.~14, 41]{cours-aws} & Pile CloudFormation en \texttt{eu-north-1}, dans le VPC par défaut et deux zones. & Une seule région, conformément au cadrage. VPC dédié non configuré. \\
 \addlinespace
-Historique et restauration & Lecture de révision ; \texttt{restoreRevision} écrit dans le pad appelé \cite{etherpad-api-code-336}. & Copie temporaire, restauration sur cette copie, pad indépendant et provenance. & Essai réel avec HTML réussi. & Attributs complexes et gros historique. \\
+ALB & Router les requêtes par listeners, groupes cibles et contrôles de santé. \cite[p.~107]{cours-aws} & Listeners HTTP 80 pour l'API et 9001 pour l'éditeur ; cibles backend et passerelles. & Deux cibles saines et \texttt{/health} rapportés. La répartition A/B n'est pas démontrée. Le port 3001 du modèle n'est pas confirmé en service. \\
 \addlinespace
-Permissions & Connexion et messages contrôlables par plugin \cite{etherpad-hooks}. & Session métier, droit de branche, état de version et passerelle API. & Accès et révocation vérifiés localement. & Session longue et déploiement public. \\
+Instances EC2 & Répartir le calcul entre zones pour limiter l'effet d'une panne. \cite[p.~16]{cours-aws} & Deux instances dans deux zones ; backend sur chacune, Etherpad unique sur A. Administration par Session Manager. & Etherpad reste un point unique. Panne et bascule de zone non testées. \\
 \addlinespace
-Clôture & File par pad et acquittement après révision \cite{etherpad-handler-336}. & Patch versionné : admission et barrière dans la file ; délai de trois secondes. & Passage à V2 et annonce client observés. & Écritures en vol, pannes et concurrence de plusieurs instances. \\
+Groupes de sécurité & Ouvrir les seuls ports utiles et référencer le groupe amont. \cite[p.~45, 48]{cours-aws} & Règles chaînées ALB vers instances, puis instances vers PostgreSQL sur 5432. & Quelques ports internes ont été sondés ; revue complète des règles effectives à faire. \\
 \addlinespace
-Échéance quotidienne & Aucune règle métier native. & Worker central et calcul par fuseau IANA. & Test réel d'échéance dépassée ; tests de changements d'heure. & Arrêt/reprise pendant une clôture. \\
+IAM et métadonnées & Rôle d'instance, identifiants temporaires et moindre privilège ; imposer IMDSv2. \cite[p.~32, 38--39, 66]{cours-aws} & Rôle sans clé dans le dépôt ; lecture des cinq secrets, accès S3 limité et fonctions SSM. IMDSv2 obligatoire, saut maximal 1. & Configuration présente. Accès effectifs et permissions dans les conteneurs restent à auditer. \\
 \addlinespace
-Crédit et invitations & Aucun couplage transactionnel avec le quota. & OTP et invitations intégrés ; autorisation de crédit à compléter. & OTP testé ; quota absent. & C4 et atomicité. \\
+Secrets Manager & Ne pas placer les secrets dans le code ou les scripts de démarrage. \cite[p.~38--39]{cours-aws} & Cinq secrets générés et lus par le rôle d'instance ; aucune valeur secrète dans le user data. & Le démarrage écrit des valeurs dans des fichiers locaux. Rotation et permissions de ces fichiers à qualifier. \\
+\addlinespace
+RDS PostgreSQL & Utiliser une base gérée et non exposée publiquement ; Multi-AZ pour la haute disponibilité. \cite[p.~16, 88]{cours-aws} & PostgreSQL 15 non public, accessible depuis les instances, en zone unique. & Migration bloquée par TLS exigé ; \texttt{rds.force\_ssl=0} a été appliqué. Les connexions DB ne sont donc pas chiffrées. Multi-AZ absent. \\
+\addlinespace
+S3 & Contrôler l'accès par IAM et garder les objets privés. \cite[p.~73, 79--80]{cours-aws} & Blocage d'accès public, chiffrement SSE-S3 et refus du transport non sécurisé. & Accès anonyme refusé (403) selon le journal. Le code n'utilise pas encore le bucket. \\
+\addlinespace
+Volumes EBS & Séparer le disque d'instance du stockage durable des données. \cite[p.~59--60]{cours-aws} & Volumes chiffrés pour le système, les images et la configuration. & Les données métier et Etherpad sont dans RDS ; aucune restauration EBS n'a été testée. \\
+\addlinespace
+Déploiement et supervision & Contrôler la configuration et surveiller santé, métriques et journaux. \cite[p.~68, 107]{cours-aws} & CloudFormation sur une région ; validation statique par \texttt{cfn-lint}. ALB et \texttt{/health} fournissent les contrôles de santé. & Création rapportée ; suppression et recréation non testées. Pas de tableau de bord ni d'alarme applicative vérifiés. \\
+\addlinespace
+Coût & Vérifier les unités facturées dans la région et sur la période utilisées. \cite[p.~17, 22]{cours-aws} & Aucun montant n'est présenté comme mesuré. & Ajouter un relevé Cost Explorer daté, avec période et ressources incluses. \\
 \bottomrule
 \end{longtable}
 \endgroup
 
-Une modification \emph{reçue} arrive au serveur. Elle est \emph{admise} si la décision prise dans la file du pad, avec l'horloge du serveur, autorise encore l'écriture. Elle est \emph{enregistrée} quand Etherpad ajoute sa révision, puis \emph{acquittée} quand le client reçoit \texttt{ACCEPT\_COMMIT}. Le patch ajoute la décision et la barrière dans cette file ; un simple hook \texttt{handleMessage} avant la file n'aurait pas suffi. Les trois secondes bornent l'admission, non l'achèvement de la copie ou de la transaction métier.
+Les recommandations de sécurité et de réseau s'appuient sur le cours fourni ; l'état décrit vient du modèle, de son README et des relevés. Cela ne prouve ni une disponibilité multizone complète ni la tenue en charge.
+\section{Vérifications AWS rapportées et limites}
 
-Le client désactive l'édition après annonce de fermeture et garde une copie du texte local. Après rechargement, cette copie demeure consultable dans le navigateur. Elle peut contenir des contributions déjà enregistrées ; elle n'est pas le delta exact refusé et n'est pas réinsérée automatiquement. Une coupure n'est pas détectée instantanément, et un test de reconnexion après longue coupure reste nécessaire. Les droits et l'état de la version sont revérifiés côté serveur au prochain message. Le débit du crédit et l'enregistrement de la révision ne forment toujours pas une transaction commune.
+Le journal du 26 octobre rapporte deux cibles saines, 20 réponses HTTP 200 à \texttt{/health} et 30 réponses 200 à \texttt{GET /projects}. Ces séries ne prouvent pas la répartition entre instances. Deux rédacteurs ont observé le même texte entrelacé, sans établir la conservation des écritures sous panne. La passerelle et l'accès anonyme à S3 ont répondu 403 ; les sondages de quelques ports internes ont expiré. \cite{aws-test-records}
 
-\section{Déploiement local et vérifications}
-
-L'environnement local comprend PostgreSQL 15, Etherpad 3.3.6, le backend et une passerelle Nginx. Le script de préparation génère des secrets hors Git ; les migrations précèdent le démarrage du backend. Les commandes figurent dans \texttt{application/README.md}. Lors de cette livraison, la compilation TypeScript, les tests de calendrier et les tests d'intégration contre les conteneurs ont été exécutés ; les résultats précis et leur date figurent dans \texttt{VALIDATION.md}. Les validations antérieures y restent distinguées.
-
-\section{Limites et infrastructure cible}
-
-Les branches, versions, permissions, clôtures, restaurations, sessions vérifiées et invitations e-mail sont codées ; leur qualification reste partielle. Le contrôle du crédit, les liens limités, les PDF, les notifications du dernier téléchargement et la supervision ne sont pas implémentés. La copie initiale d'une version n'est pas facturée dans ce code, sans fixer encore la règle métier définitive. Aucun essai de 300 rédacteurs ou de 15\,000 visiteurs n'a été exécuté. La garantie C2 exige encore des essais sur les écritures simultanées, en transit et lors des pannes ; C4 n'est pas satisfaite.
-
-La cible demeure le compte AWS du porteur, dans une région, avec les PDF conservés dans S3, sans clés AWS dans le dépôt et avec des permissions minimales \cite{sujet}. Aucun service AWS supplémentaire ni coût n'est présenté comme validé ; aucune ressource AWS n'est déployée ici.
+Aucun test de charge, arrêt d'instance, bascule de zone ou relevé de coût n'a été réalisé. C1 n'a pas été testée ; C2 n'est étayée que par l'essai ponctuel à deux rédacteurs. Le listener 3001 n'est pas confirmé en service. La preuve de coût reste à joindre depuis Cost Explorer.

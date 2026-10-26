@@ -1,0 +1,40 @@
+@startuml
+!include style.puml
+title Architecture logique du système
+top to bottom direction
+skinparam defaultFontSize 17
+package "Interfaces" as UI {
+  [Rédacteur, propriétaire\net visiteur] as Actors
+}
+package "Entrée et collaboration" as Edge {
+  [Répartition des demandes] as Router
+  [Édition simultanée, présences\net historique technique] as Editor
+  [Passerelle HTTP et éditeur] as Gateway
+}
+package "Services métier" as Business {
+  [Identité et sessions] as Identity
+  [Projets, branches\net permissions] as Branches
+  [Invitations et clôtures] as Sharing
+  [Crédit et liens] as Rules
+}
+database "Données métier, sessions\net révisions" as DB
+component "Génération des PDF" as Pdf
+cloud "Fichiers diffusés" as Files
+queue "Remise des courriels" as Mail
+Actors --> Router : requêtes
+Router --> Gateway
+Gateway --> Editor : édition en temps réel
+Router --> Identity : API métier
+Identity --> Branches
+Branches --> Sharing
+Branches --> Rules
+Identity --> DB
+Branches --> DB
+Sharing --> DB
+Rules --> DB
+Editor --> DB
+Rules --> Pdf : demande d'export
+Pdf --> Files : PDF cohérent
+Rules --> Files : transfert après autorisation
+Sharing --> Mail : invitation et notification
+@enduml

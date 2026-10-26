@@ -1,16 +1,127 @@
 \chapter{Conception}
 
+\section{Architecture du système}\label{sec:architecture-systeme}
+
+La vue logique décrit les responsabilités ; la vue de déploiement décrit leur hébergement observé dans AWS au 26 octobre 2026. Elle ne prouve ni capacité ni disponibilité.
+
+Les contraintes C1 à C6 reprises ici proviennent du sujet fourni \cite[p. 2--3]{sujet}.
+
+\subsection{Vue logique}
+\umlfigure{architecture-logique.png}{0.94}{Responsabilités logiques et échanges du système.}{fig:architecture-logique}
+
+L'interface rejoint l'API métier et l'éditeur collaboratif. Le backend gère identité, droits, invitations, crédit et versions ; l'éditeur assure la collaboration, les présences et l'historique technique. Les données métier et les révisions sont persistées, tandis que les fichiers diffusés sont séparés. PDF, quotas et notifications de téléchargement restent absents du code.
+
+\subsection{Vue de déploiement observée}
+\umlfigure{deploiement-aws.png}{0.96}{Ressources AWS décrites et déployées en eu-north-1.}{fig:deploiement-aws}
+
+CloudFormation déploie dans le VPC par défaut d'\texttt{eu-north-1} deux EC2 réparties entre deux zones, un ALB, RDS PostgreSQL 15 non public, S3 privé et cinq secrets. A héberge Etherpad, le backend et Nginx ; B héberge un backend et relaie l'éditeur vers A. Les ports 80 et 9001 sont vérifiés. Le listener 3001 et le frontend du modèle ne le sont pas. S3 n'est pas encore utilisé par le code. \cite{aws-local-artifacts}
+
+Le backend et Etherpad partagent PostgreSQL, dans des schémas distincts. EBS contient système, images et configuration ; les données persistantes restent dans RDS. Les instances lisent leurs secrets via IAM. GHCR fournit les images ; la pile est mise à jour manuellement, sans déploiement par GitHub Actions.
+
+\subsection{Échanges des composants et parcours}
+
+L'ALB reçoit l'édition sur 9001 ; Nginx en A transmet à Etherpad et Nginx en B relaie vers A. Le plugin \texttt{ep\_business} consulte le backend pour les droits et l'admission. Etherpad conserve les révisions dans PostgreSQL ; le patch place la barrière dans la file ordonnée du pad. L'éditeur reste unique.
+
+Le backend orchestre la clôture, fixe la révision finale et prépare le successeur ; ce parcours a été essayé en local, pas sur AWS. Les invitations passent par la base métier et le relais configuré, mais aucun SMTP AWS n'est prêt pour les essais du jury.
+
+Le téléchargement n'est pas implémenté : aucun PDF n'est généré et le code ne lit pas S3. Le backend devra autoriser chaque transfert ; les visiteurs n'auront pas de session Etherpad.
+
+\subsection{Décisions d'architecture et compromis}
+
+\begin{longtable}{@{}L{26mm}L{30mm}L{45mm}L{40mm}@{}}
+\caption{Décisions d'architecture, options et compromis observés.}\label{tab:decisions-architecture}\\
+\toprule Décision & Alternatives considérées & Raison dans ce projet & Compromis et limites \\
+\midrule\endfirsthead
+\toprule Décision & Alternatives considérées & Raison dans ce projet & Compromis et limites \\
+\midrule\endhead
+Un Etherpad actif & Deux moteurs actifs ; Etherpad dédié & Un seul moteur évite de répartir les écritures d'un même pad sans protocole de synchronisation démontré. & La panne de A interrompt toute édition ; le débit de 300 rédacteurs n'est pas prouvé. \\
+Deux backends derrière l'ALB & Un backend ; deux instances redondantes en ECS & Les deux instances peuvent recevoir l'API et partagent PostgreSQL. & Leur répartition et les sessions interinstances n'ont pas été qualifiées sur AWS ; l'éditeur n'est pas redondé. \\
+Base partagée & Base par instance ; réplication applicative & Les sessions et données métier sont accessibles depuis A et B. & La base reste un point de dépendance unique, en une zone ; l'accès DB n'utilise pas TLS. \\
+Passerelles Nginx & Accès direct à Etherpad ; proxy unique & Le port d'édition est séparé et les API administratives sont bloquées côté navigateur. & Le relais B vers A ajoute un saut et dépend du moteur sur A. \\
+Listeners HTTP 80 et 9001 & Un seul port HTTPS derrière domaine ; port 3001 pour le frontend dans le modèle. & Sépare l'API et l'éditeur sur la pile vérifiée ; le modèle ajoute un port pour le frontend. & HTTP seul, aucun domaine ni TLS ; le listener 3001 du modèle et le frontend ne sont pas vérifiés sur AWS. \\
+VPC par défaut & VPC dédié & Réutilise le réseau existant et réduit la configuration initiale. & Les sous-réseaux sont publics ; la sécurité dépend des groupes et des règles effectives. \\
+EC2 et Compose & ECS/Fargate & Déploiement actuel et accès par Session Manager ; Compose réutilisé. & Administration et mises à jour manuelles ; deux instances ne rendent pas Etherpad hautement disponible. \\
+RDS PostgreSQL & PostgreSQL autogéré sur EC2 ; Multi-AZ & Service relationnel persistant partagé par métier, authentification et Etherpad. & Déploiement mono-zone et paramètre TLS désactivé après l'incident de migration. \\
+GHCR & ECR & Le workflow de publication existant pousse les images vers GHCR par SHA et digest. & Déploiement AWS dépend d'images GHCR publiques ; aucun rôle OIDC vers ECR. \\
+Cloud\-Formation & Terraform & Le dépôt fournit un modèle CloudFormation unique pour créer et supprimer la pile. & Modèle dépendant d'AWS ; création réelle vérifiée une fois, sans test de suppression ni recréation. \\
+HTTP sans domaine & Domaine et HTTPS & Suffisait pour la première mise en route avec l'URL de l'ALB. & Cookies et vérification d'identité ont des limites ; données applicatives et base circulent sans chiffrement de bout en bout. \\
+Identité locale & OTP par e-mail en production & Adaptateur local utile au développement et au test. & Une adresse déclarée peut être usurpée ; aucun SMTP n'est installé sur AWS. \\
+\bottomrule
+\end{longtable}
+
+Deux backends répartissent l'API, mais ne redondent pas Etherpad. Ni l'ALB ni la base commune ne démontrent C2 en cas de panne du moteur.
+
+\subsection{Contraintes, composants et preuves attendues}
+
+Les identifiants T-C1 à T-C6 désignent les essais à réaliser. Le tableau distingue leur périmètre de l'état déjà observé.
+
+\begingroup\small
+\setlength{\tabcolsep}{0pt}
+\begin{longtable}{@{}L{12mm}L{37mm}L{74mm}L{38mm}@{}}
+\caption{Traçabilité entre contraintes prioritaires, composants et essais.}\label{tab:architecture-contraintes}\label{tab:trace-architecture}\\
+\toprule ID & Composants & Essai attendu & État observé \\
+\midrule\endfirsthead
+\toprule ID & Composants & Essai attendu & État observé \\
+\midrule\endhead
+C1 & Backend, base, Nginx, S3. & Demandes concurrentes au-delà de N, rejeux et abandons ; comparer réservations et transferts. & Lien limité absent ; essai absent. \\
+C2 & Etherpad, plugin, patch ordonné, PostgreSQL. & Opérations simultanées et en file, pannes et reconnexions ; vérifier conservation et état final. & Deux rédacteurs ont convergé lors d'un essai ; preuve incomplète. \\
+C3 & Capture de révision, worker PDF, S3. & Corriger avant et pendant la demande ; comparer le PDF à sa révision de référence. & PDF absent ; essai absent. \\
+C4 & Backend, identité et stockage du crédit. & Débits concurrents sur plusieurs appareils et documents, puis changement de journée. & Quota absent ; essai absent. \\
+C5 & ALB, EC2, Etherpad, RDS et diffusion PDF. & Scénario du sujet avec latence, erreurs et état de chaque rédacteur. & Aucune charge exécutée. \\
+C6 & Backend, worker et suivi de demande. & Épuiser un lien avec des visiteurs en attente ; mesurer l'information et l'arrêt des tâches inutiles. & Fonctions absentes ; essai absent. \\
+\bottomrule
+\end{longtable}
+\endgroup
+
+\subsection{Pannes et conséquences}
+
+\begin{tabularx}{\linewidth}{@{}L{28mm}Y Y@{}}
+\toprule Panne & Conséquence probable & État du test \\
+\midrule
+Instance A & Etherpad unique indisponible, donc édition interrompue ; relais et backend de A également perdus. & Pas de test d'arrêt AWS. \\
+Instance B & Le backend A et Etherpad peuvent rester accessibles ; le relais et backend B sont perdus. & Pas de test d'arrêt AWS. \\
+RDS & Sessions, données métier et données Etherpad deviennent indisponibles ; les contrôles de santé backend échouent. & Pas de panne injectée. \\
+Une zone & Si A est touchée, Etherpad tombe ; si B est touchée, capacité API et relais diminuent. RDS est mono-zone et peut être dans l'une ou l'autre. & Répartition de zones connue ; bascule non testée. \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Sécurité, données et supervision}
+
+\begin{tabularx}{\linewidth}{@{}L{36mm}L{50mm}Y@{}}
+\toprule Contrôle & Configuration présente & Limite ou suite à vérifier \\
+\midrule
+Groupes de sécurité & Le modèle ouvre 80, 9001 et 3001 sur l'ALB, puis limite les ports applicatifs aux groupes attendus ; PostgreSQL accepte 5432 depuis les instances. & Les ports internes ont été sondés depuis Internet et ont expiré lors d'un essai ; le listener 3001 n'est pas vérifié dans la pile active. \\
+IAM & Rôle d'instance limité à la lecture des cinq secrets nommés, aux objets du préfixe d'export S3 et aux fonctions SSM. & S3 n'est pas encore utilisé par le code ; vérifier les accès réels et le moindre privilège après intégration. \\
+Secrets et métadonnées & Secrets générés dans Secrets Manager ; IMDSv2 obligatoire, saut maximal 1. & Les secrets sont écrits dans des fichiers locaux au démarrage ; contrôler leurs permissions et rotation. \\
+S3 & Blocage d'accès public, chiffrement SSE-S3 par défaut, refus de transport non sécurisé. & Un accès anonyme a reçu 403 lors d'un essai ; le contenu n'est pas encore lu/écrit par l'application. \\
+Transport & Listener HTTP ; accès base sans TLS après \texttt{rds.force\_ssl=0}. & Ajouter domaine et HTTPS, puis activer TLS vers PostgreSQL et protéger les cookies. \\
+Supervision & Contrôle de santé ALB et route \texttt{/health} qui vérifie la connexion PostgreSQL. & Aucun tableau de bord, alarme, journal central configuré ou mesure de charge n'a été vérifié. \\
+\bottomrule
+\end{tabularx}
+
+RDS contient les données métier, les sessions et Etherpad. S3 est provisionné mais inutilisé ; EBS porte le système et la configuration, pas les pads. L'ALB expose l'état des cibles, mais aucun dispositif complet de supervision applicative n'est configuré.
+
+\subsection{Capacité, coût et évolutions possibles}
+
+Le sujet prévoit 15\,000 visiteurs, dont 12\,000 en une minute, soit 200 arrivées par seconde en moyenne. Cela ne fixe ni les rafales ni le nombre de requêtes par visiteur. Il demande aussi 300 rédacteurs actifs, sans préciser leur répartition entre pads. Aucun de ces scénarios n'a été testé.
+
+Le calculateur et l'outil de charge Etherpad donnent des repères, pas une garantie pour ce déploiement. L'issue sur le nombre de contributeurs par pad ne publie pas les résultats PostgreSQL/PgBouncer évoqués dans la demande. Les chiffres matériels associés à cet essai ne sont donc pas retenus. PgBouncer reste à examiner si les mesures révèlent une saturation ; la documentation Node.js ne justifie pas de fixer \texttt{UV\_THREADPOOL\_SIZE} à 128 pour les WebSocket. \cite{etherpad-scale,etherpad-loadtest,etherpad-7756,nodejs20-cli}
+
+La qualification devra mesurer un pad, puis plusieurs, avec la latence, les erreurs, les connexions PostgreSQL, la boucle d'événements, le CPU, la mémoire et le réseau. Un essai de charge ne prouvera pas à lui seul C2, qui demande aussi des tests de conservation et de convergence. Le coût reste à relever dans Cost Explorer, avec région, période et ressources ; aucun prix ni résultat de capacité n'est annoncé. \cite{aws-cost-explorer}
+
+Les évolutions possibles sont un hôte Etherpad dédié, une diffusion PDF extensible, RDS Multi-AZ, un domaine HTTPS, TLS vers PostgreSQL et un relais SMTP. Elles restent à décider et à tester.
+
 \section{Gestion du crédit, des débits et des écritures}
 
-Dans cette section, « facturation » désigne uniquement la consommation du crédit d'écriture, sans paiement. Le sujet impose un crédit de 10\,000 caractères par rédacteur et par jour, commun à ses documents et à ses appareils, ainsi que l'impossibilité d'écrire au-delà de ce crédit et un blocage temporaire en cas d'acharnement \cite{sujet}. Il ne définit ni l'unité Unicode, ni l'heure de recharge, ni le détail des opérations facturables. Les règles qui suivent constituent donc un \emph{modèle proposé pour le MVP}, à confronter au fonctionnement réel de l'éditeur retenu et à valider avec le porteur du projet (Q-02, Q-04 à Q-07 et Q-09).
+Dans cette section, « facturation » désigne uniquement la consommation du crédit d'écriture, sans paiement.
 
 \subsection{Objet et unité du crédit}
 
-Le crédit mesure le texte \emph{inséré et accepté} par un rédacteur pendant une journée. Il ne mesure ni les touches pressées, ni les échanges avec le système, ni la taille finale du document, ni les modifications reçues des autres rédacteurs. Le coût est cumulé pour un même utilisateur, quels que soient ses documents, ses sessions et ses appareils.
+Le crédit compte le texte \emph{inséré et accepté} par rédacteur et par jour, tous documents, sessions et appareils confondus. Il exclut les frappes, requêtes, taille finale et modifications reçues d'autrui.
 
-L'unité proposée est le \emph{point de code Unicode}, qui ne correspond pas toujours à un caractère perçu par le lecteur. Ainsi « Bonjour » contient sept points de code, « é » précomposé en contient un, tandis que « e » suivi d'un accent combinant en contient deux. Les espaces et les retours à la ligne saisis comptent ; les éléments ajoutés automatiquement pour le fonctionnement de l'éditeur ne comptent pas.
+L'unité proposée est le \emph{point de code Unicode}, distinct des octets, unités UTF-16 et graphèmes. « Bonjour » en compte 7, « é » précomposé 1, et « e » suivi d'un accent combinant 2. Espaces et retours saisis comptent ; les éléments techniques de l'éditeur sont exclus.
 
-Le calcul proposé compte les points de code du texte effectivement inséré, sans transformer silencieusement sa forme Unicode. Deux suites visuellement identiques, comme les deux formes de « é » ci-dessus, peuvent donc avoir des coûts différents : ce choix doit être confirmé. Une règle commune doit aussi fixer comment compter les retours à la ligne, sans changer à l'insu des rédacteurs le texte ou les positions d'écriture.
+Le comptage proposé ne normalise pas le texte : deux formes visuellement identiques peuvent donc coûter différemment. La normalisation et les fins de ligne restent à décider sans modifier les positions Etherpad.
 
 \subsection{Coût proposé des opérations}
 
@@ -31,62 +142,60 @@ Réinsertion volontaire d'un texte refusé & Coût des nouveaux points de code i
 \end{tabularx}
 \end{center}
 
-Ces coûts sont des propositions de conception, non des précisions énoncées par le sujet. Les remplacements et les annulations devront être vérifiés. Selon la décision du porteur, la restauration crée une branche indépendante : elle ne réécrit pas la version source. La gratuité de la copie initiale reste à valider ; une saisie ultérieure dans la nouvelle branche suit les règles ordinaires.
+Ces règles sont proposées, non imposées par le sujet. Le coût des remplacements, annulations et copies reste à valider. Une restauration crée une branche indépendante ; toute saisie ultérieure suit le contrôle ordinaire.
 
 \subsection{Acceptation, plafond et refus}
 
-Une frappe peut être préparée et affichée localement, puis reçue par le système, sans être encore acceptée. Le modèle distingue : \emph{préparée localement}, \emph{reçue}, \emph{admise} pour traitement, \emph{enregistrée} dans l'historique de l'éditeur, \emph{acceptée} et \emph{refusée}. L'admission ne vaut pas acceptation. Une confirmation d'acceptation ne doit être émise qu'après preuve que l'écriture durable et son débit sont cohérents. L'articulation exacte entre confirmation, retransmission et conservation des écritures reste à établir ; l'affichage local ne constitue pas cette preuve.
+Une saisie affichée localement ou reçue n'est pas nécessairement acceptée. Le modèle distingue préparation, réception, admission, enregistrement dans l'historique, acceptation et refus. L'admission ne vaut pas acceptation : la confirmation exige une écriture durable cohérente avec le débit. Le protocole de reprise reste à établir.
 
 Soit $C(u,j)$ la consommation acceptée du rédacteur $u$ pour la journée $j$. L'invariant visé est :
 \[
   C(u,j) \leq 10\,000.
 \]
-Une opération de coût $c$ ne peut être acceptée que si
-$C(u,j)+c\leq 10\,000$.
-Le refus entier est proposé lorsque l'opération dépasse le reliquat : avec 30 points de code disponibles, un collage de 50 points de code est refusé sans débit définitif. L'interface devra expliquer le refus et conserver le texte non accepté afin que le rédacteur puisse le récupérer. Une opération déjà acceptée, identifiée de manière stable, ne doit pas être débitée une seconde fois lors d'une retransmission.
+Une opération de coût $c$ est admissible si $C(u,j)+c\leq10\,000$. Le refus entier est proposé : avec 30 points restants, un collage de 50 est refusé sans débit définitif. L'interface doit expliquer le refus et permettre de récupérer le texte. Une retransmission ne débite pas deux fois une opération acceptée.
 
 \subsection{Journée, débit et abus}
 
-La journée civile UTC est proposée : elle commence à 00\,h\,00 UTC et se termine juste avant le minuit suivant, sans report du reliquat. L'horloge du serveur fait foi et une opération appartient au jour de son acceptation, non à l'heure annoncée par le navigateur. Une fenêtre glissante de 24 heures depuis la première écriture produirait une autre règle ; ce n'est pas le choix proposé ici. La bascule de jour pendant une opération en cours devra être testée.
+La journée UTC est proposée, de minuit à minuit, sans report. L'horloge serveur attribue le jour à l'acceptation, jamais à l'heure du navigateur. La bascule pendant une opération reste à tester ; une fenêtre glissante de 24 heures serait une autre règle.
 
-Le \emph{crédit} est une quantité cumulée par jour ; le \emph{débit} est un nombre de caractères ou d'opérations par unité de temps ; la \emph{protection contre les abus} constitue encore une autre règle. Le sujet n'impose pas d'étaler les 10\,000 caractères sur la journée : un collage volumineux peut être légitime. Aucun plafond arbitraire de caractères par seconde n'est fixé. Les seuils, la fenêtre d'observation, la durée et le périmètre d'un blocage temporaire restent à valider (Q-07).
+Le crédit est un cumul quotidien ; le débit mesure les opérations par unité de temps ; la lutte contre les abus est distincte. Le sujet n'impose pas de cadence, donc aucun plafond par seconde n'est fixé. Seuils, fenêtre, durée et périmètre du blocage restent ouverts (Q-07).
 
 \subsection{Identité, sessions et appareils}
 
-Le crédit appartient à un utilisateur identifié de manière stable. Un rédacteur peut avoir plusieurs sessions simultanées ; fermer le navigateur, se reconnecter, changer de version ou créer une branche ne renouvelle pas son crédit. Le modèle conceptuel minimal comprend un \emph{rédacteur}, une \emph{session} avec expiration, une \emph{consommation journalière} et une \emph{opération d'écriture} identifiée de façon stable avec son état. Le crédit reste conservé par le système, indépendamment du navigateur. Un éventuel repère de navigateur ne prouve pas l'existence d'un appareil physique distinct.
+Le crédit appartient à une identité stable et survit aux reconnexions, versions et branches. Le modèle distingue rédacteur, session expirante, consommation journalière et opération identifiée. Un identifiant de navigateur ne prouve pas l'identité d'un appareil.
 
-Le sujet demande le nom et l'adresse e-mail sans compte classique \cite{sujet}. Le porteur ajoute une vérification par code envoyé à cette adresse avant d'établir l'identité métier stable \cite{decisions-porteur}. Plusieurs sessions peuvent alors partager le même crédit. La possession d'une adresse ne prouve pas qu'une personne ne dispose pas d'autres adresses. Il faudra vérifier qu'un même rédacteur conserve un crédit commun lors de plusieurs connexions, même si l'éditeur lui attribue plusieurs identifiants internes. Le choix de l'outil de vérification reste ouvert ; aucun mot de passe ni dispositif de reconnaissance du matériel n'est imposé.
+Le sujet demande nom et e-mail sans compte classique ; le porteur ajoute la vérification par code \cite{sujet,decisions-porteur}. Plusieurs sessions partageront le crédit du même utilisateur. Une adresse vérifiée ne garantit pas l'unicité d'une personne. L'outil reste à choisir ; aucun mot de passe ni suivi du matériel n'est requis.
 
 \subsection{Cohérence du débit et décision à valider}
 
-Un compteur atomique évite certains dépassements concurrents, mais ne rend pas à lui seul atomique l'ensemble « consommation du crédit + conservation de l'écriture ». Les échecs possibles sont : crédit débité sans écriture conservée, écriture acceptée sans débit, double débit après retransmission et dépassement entre appareils ou documents. Une réservation, un journal d'opérations sans double effet et une reprise après incident sont des pistes à étudier, sans garantie annoncée tant que le point de validation des écritures et les scénarios de panne n'ont pas été vérifiés.
+Un compteur atomique ne rend pas atomiques le débit et la conservation de l'écriture. Il faut prévenir débit sans écriture, écriture sans débit, double débit et dépassement multiappareil. Réservation, journal idempotent et reprise restent des pistes, pas des garanties établies.
 
-Le refus d'une opération doit intervenir avant qu'elle ne soit diffusée comme acceptée et ne doit pas perturber les opérations suivantes. Le mécanisme de validation et l'ordre des confirmations seront examinés sur la version intégrée de l'éditeur. Un débit de crédit suivi séparément d'une sauvegarde ne démontre ni l'invariant de crédit ni la conservation des écritures acceptées. La qualification demandera des essais concurrents, des retransmissions et des pannes à chaque frontière d'acceptation.
+Le refus doit précéder toute diffusion comme acceptée et ne pas bloquer les opérations suivantes. Un appel de débit suivi d'une sauvegarde séparée ne prouve ni le quota ni la conservation. Il faut tester concurrence, retransmissions et pannes aux frontières d'acceptation.
 
 \subsection{Diagramme de classes du crédit}
 \umlfigure{credit-classes.png}{0.76}{Crédit d'écriture : objets conceptuels et frontière avec l'éditeur (cible).}{fig:credit-classes}
-Ce diagramme sépare le compteur journalier, l'opération identifiée et la révision de l'éditeur. Le service de crédit et le journal d'opérations sont une cible de conception, pas des classes déjà opérationnelles.
+Le diagramme distingue compteur, opération et révision. Le service de crédit reste une cible, non une fonction opérationnelle.
 
 \subsection{Diagramme d'activités du crédit}
 \umlfigure{credit-activites.png}{0.72}{Contrôle proposé d'une écriture, du refus à la confirmation.}{fig:credit-activites}
-Le parcours vérifie d'abord l'identité, le droit et la version ; il calcule ensuite le coût des seuls points de code insérés. Le débit durable, le traitement de l'échec et la confirmation demandent encore un protocole démontré.
+Le parcours vérifie identité, droit et version, puis compte les points insérés. Débit durable et confirmation restent à démontrer.
 
 \subsection{Diagramme de séquence du crédit}
 \umlfigure{credit-sequence.png}{0.78}{Échanges visés pour écrire avec crédit suffisant ou refuser.}{fig:credit-sequence}
-La frontière entre le stockage métier et les révisions de l'éditeur est volontairement visible. La séquence indique un besoin de réconciliation ; elle ne prétend pas qu'une transaction atomique existe déjà entre les deux systèmes.
+La séquence montre la frontière entre stockage métier et révisions. Aucune transaction atomique entre eux n'est acquise.
 
-\needspace{15\baselineskip}
+\needspace{5\baselineskip}
 \section{Historique, versionnage et branches}\label{sec:conception-historique}
 
-Les règles de cette section précisent l'usage du journal décidé par le porteur du projet \cite{decisions-porteur}. Elles complètent le sujet initial. Le code réalise les parcours locaux de branches, de versions et de clôture ; les garanties de panne et de charge restent à démontrer.
+Cette section précise les règles de versionnage décidées par le porteur \cite{decisions-porteur}. Les parcours locaux existent ; les garanties de panne et de charge restent à démontrer.
 
 \subsection{Termes et organisation des documents}
 
-Une \emph{révision technique} est un état enregistré au fil des modifications de l'éditeur. Une \emph{version métier} (V1, V2, etc.) est une étape de travail explicitement ouverte, puis figée. Elle peut contenir de nombreuses révisions techniques : chaque frappe ne crée pas une nouvelle version métier. Une \emph{branche} rassemble une succession de versions métier et possède son propre historique. Une version appartient à une seule branche ; une branche ne possède au plus qu'une version ouverte à l'édition. Pendant une clôture, sa version active est en état FERMETURE et la suivante n'est pas encore éditable.
+Une \emph{révision technique} enregistre une modification. Une \emph{version métier} (V1, V2…) est une étape ouverte puis figée, composée de plusieurs révisions. Une \emph{branche} regroupe ces versions et n'en possède qu'une ouverte au plus. Pendant la clôture, la version active est en FERMETURE et son successeur reste inactif.
 
-Le projet d'édition porte le propriétaire unique, le fuseau IANA et la prochaine échéance. Chaque branche porte ses droits et sa version active ; chaque version porte son numéro, son état, sa référence de pad et sa révision finale lorsqu'elle est figée. Une provenance désigne la branche, la version et la révision sources. Une clôture possède une cause, une échéance et un avancement. Ces objets existent dans le schéma métier actuel, sous des noms anglais ; la table historique 	exttt{documents} joue le rôle de projet d'édition. Elle sera renommée seulement par une migration préservant les données.
+Le projet porte propriétaire, fuseau IANA et échéance ; la branche, ses droits et sa version active ; la version, son numéro, son état, son pad et sa révision finale. La provenance identifie sa source et la clôture, sa cause et son avancement. Dans le code, la table historique \texttt{documents} représente le projet ; son renommage attend une migration préservant les données.
 
-Par exemple, la branche A contient V1 figée puis V2 éditable. Si son propriétaire restaure une révision de V1, le système crée la branche B et sa première version éditable à partir de ce texte. La provenance de B mentionne A, V1 et la révision choisie. V1 et V2 de A ne changent pas ; les modifications ultérieures de A et de B ne se propagent pas entre les branches. Même avec un texte initial identique, les deux documents de travail sont distincts. Le MVP ne prévoit pas de fusion automatique.
+Exemple : A contient V1 figée puis V2 ouverte. Restaurer une révision de V1 crée B et sa première version à partir du contenu choisi, avec sa provenance. A et B restent indépendantes, même avec le même texte initial ; aucune fusion automatique n'est prévue.
 
 \subsection{Autorisations et édition en ligne}
 
@@ -104,59 +213,59 @@ Personne sans droit & Non ; un lien public de PDF suit une règle distincte. & N
 \bottomrule
 \end{tabularx}
 
-Le droit de lecture porte sur la branche et son historique. Le droit d'écriture vise uniquement la version active ouverte ; une version figée reste en lecture seule. La bascule vers V2 conserve les droits de la branche, y compris leurs révocations, sans nouvelle invitation. Une restauration n'hérite pas automatiquement des droits de la source : le propriétaire attribue les accès à la branche créée. Le serveur doit vérifier ces règles avant d'admettre une écriture ; un verrouillage visuel seul ne suffit pas.
+READ couvre la branche et son historique ; WRITE permet de modifier uniquement sa version active ouverte. Les droits, révocations comprises, survivent à V2. Une branche restaurée ne reprend aucun accès collaborateur. Le serveur contrôle chaque écriture ; le verrouillage visuel ne suffit pas.
 
-La saisie suppose une connexion opérationnelle au serveur d'édition. Lorsqu'une coupure est détectée, l'interface doit cesser d'accepter de nouvelles saisies. La détection n'est pas instantanée : le texte affiché localement pendant cet intervalle n'est pas pour autant accepté. À la reconnexion, le système doit vérifier de nouveau la version active, les droits et le crédit avant toute écriture ; il ne doit pas rejouer automatiquement une modification devenue interdite.
+L'édition exige une connexion opérationnelle. La coupure n'est pas détectée instantanément ; les saisies locales ne sont pas pour autant acceptées. À la reconnexion, droits, version et crédit sont revérifiés, sans rejouer les opérations devenues interdites.
 
 \subsection{Fermeture manuelle et passage quotidien}
 
 \umlfigure{cycle-version-metier.png}{0.72}{Cycle métier d'une version ; la suivante est un autre document de travail.}{fig:cycle-version-metier}
 
-Lors d'un gel manuel, le serveur enregistre la demande et fixe une échéance trois secondes plus tard selon son horloge. Il informe les clients, qui désactivent les nouvelles saisies. La marge permet l'admission d'opérations reçues par le serveur avant l'échéance, sous réserve des droits et du crédit ; une heure déclarée par le navigateur ne fait pas foi. Après l'échéance, toute opération encore non admise est refusée explicitement. Les trois secondes bornent la fenêtre d'admission, pas le temps total de persistance ou de création de V2.
+Le gel manuel fixe une échéance serveur à trois secondes et avertit les clients. Les opérations admissibles peuvent être admises avant cette échéance ; l'heure du navigateur ne fait pas foi. Ensuite, toute nouvelle admission est refusée. Ces trois secondes bornent l'admission, pas la persistance ni la création de V2.
 
-La clôture suit un ordre : fermer l'admission, résoudre chacune des opérations admises, fixer la révision finale, figer V1, créer le nouveau document de travail depuis ce contenu, puis activer V2. Une opération admise peut encore être refusée avec une réponse explicite ; une opération déjà acceptée ne peut pas être abandonnée. V2 ne devient éditable qu'une fois la source finale déterminée. La reprise après incident doit reconnaître la clôture par son identifiant et ne créer qu'un seul successeur actif.
+La clôture ferme l'admission, traite les opérations admises, fixe la révision finale, fige V1, crée puis active V2. Une écriture acceptée n'est jamais abandonnée. La reprise identifie la clôture et ne crée qu'un successeur.
 
-Le même mécanisme se déclenche à la fin de la journée civile du propriétaire, même s'il est absent. Son fuseau IANA est conservé explicitement ; le backend calcule et recherche périodiquement les échéances, sans minuteur permanent par document. Si la fermeture commence à minuit local, l'admission cesse trois secondes plus tard, puis la finalisation peut prendre davantage de temps : V1 n'est pas un instantané strict de minuit. Les droits de branche demeurent applicables à V2 lorsqu'elle est prête. Cette journée de versionnage, la journée UTC proposée pour le quota du rédacteur et la durée de ses sessions sont trois notions distinctes. La clôture ne recharge jamais le crédit.
+Le traitement périodique applique la même clôture à l'échéance locale du propriétaire, même absent. Il conserve le fuseau IANA et n'utilise pas de minuteur par document. À minuit, l'admission cesse trois secondes plus tard et la finalisation peut durer davantage : V1 n'est pas un instantané strict de minuit. Les droits suivent V2 ; la clôture ne recharge pas le crédit, dont la journée est distincte.
 
 \subsection{Écritures refusées, invariants et décisions restantes}
 
-Une opération trop tardive est refusée avec une explication. Une proposition simple pour le MVP est un panneau ou un export du texte local, afin que le rédacteur puisse récupérer ce qu'il souhaite réinsérer lui-même dans V2. Cette réinsertion passe à nouveau par les droits, le crédit et l'acceptation habituelle. Le texte local complet peut déjà contenir des contributions acceptées : il ne faut pas le copier intégralement dans V2 comme s'il représentait seulement le refus. Le client local conserve maintenant cette copie dans le navigateur après rechargement ; les essais de reconnexion longue restent à faire.
+Une saisie tardive est refusée avec explication. Le rédacteur peut récupérer le texte local et le réinsérer volontairement dans V2, après contrôle des droits et du crédit. Cette copie peut contenir des contributions déjà acceptées ; elle n'est pas le seul delta refusé. La récupération après rechargement existe localement, mais les longues reconnexions restent à tester.
 
-Les invariants visés sont : au plus une version OUVERTE par branche ; aucune écriture ordinaire dans une version FIGÉE ; aucune perte d'une écriture acceptée pendant la clôture ; aucune nouvelle admission après l'échéance ; aucune activation du successeur tant que la révision finale reste indéterminée ; aucune propagation automatique entre branches ; aucune recharge de crédit par changement de version ; un seul successeur pour une même clôture, y compris après reprise.
+Invariants : une seule version ouverte par branche ; aucune écriture ordinaire dans une version figée ; aucune perte d'une écriture acceptée ; aucune admission après échéance ; aucun successeur avant fixation de la révision finale ; aucune propagation entre branches ni recharge de crédit ; un seul successeur après reprise.
 
-Restent à valider la rétention des révisions, la création quotidienne d'une nouvelle version lorsque le texte n'a pas changé, la facturation de la copie initiale et la façon de distinguer précisément les opérations déjà en transit lorsque le gel commence. La preuve des garanties d'admission et de persistance dépendra de l'intégration réelle avec l'éditeur.
+Restent ouverts : rétention des révisions, clôture quotidienne sans changement, coût de la copie initiale et admission des opérations déjà en transit. Les garanties dépendent de l'intégration avec l'éditeur.
 
 
 \subsection{Diagramme de classes des versions}
 \umlfigure{version-classes.png}{0.78}{Projet, branches, versions, provenance et clôture.}{fig:version-classes}
-La propriété est portée par le projet. Une branche ne possède pas un propriétaire autonome ; elle conserve ses permissions au passage à V2. Chaque version métier référence un pad distinct et conserve ses révisions techniques dans ce pad.
+Le projet porte la propriété ; la branche conserve ses droits ; chaque version a son pad et son historique technique.
 
 \subsection{Diagramme d'activités de la clôture}
 \umlfigure{version-activites.png}{0.72}{Clôture ordonnée avec reprise après incident.}{fig:version-activites}
-Les trois secondes bornent l'admission. La barrière fixe la révision finale avant la création du successeur ; une panne laisse une opération à reprendre et ne justifie pas l'activation prématurée de V2.
+La barrière fixe la révision avant le successeur. Après une panne, la reprise ne doit pas activer V2 trop tôt.
 
 \subsection{Diagramme de séquence de la clôture}
 \umlfigure{version-sequence.png}{0.78}{Échanges entre propriétaire ou horloge, backend, éditeur et clients.}{fig:version-sequence}
-La restauration suit une autre demande propriétaire : elle copie une révision choisie dans une nouvelle branche du même projet. Les changements des deux branches restent indépendants et les collaborateurs ne sont pas invités implicitement.
+La restauration crée une branche indépendante depuis une révision choisie ; les collaborateurs ne sont pas invités automatiquement.
 
 \section{Création et partage des projets d'édition}\label{sec:conception-partage}
 
 \subsection{Règles et responsabilités}
-Le terme \emph{projet d'édition} désigne l'ensemble appartenant à un seul propriétaire ; l'ancienne table nommée \texttt{documents} représente actuellement cet objet et ne crée pas une seconde entité concurrente. La création idempotente produit la branche initiale, V1 ouverte et un pad indépendant. Le propriétaire contrôle toutes les branches. Un collaborateur reçoit READ ou WRITE uniquement sur la branche invitée ; WRITE inclut READ. Aucun droit n'autorise l'écriture dans une version figée.
+Le projet appartient à un propriétaire unique ; la table historique \texttt{documents} le représente. Sa création idempotente produit une branche, V1 ouverte et un pad. READ ou WRITE s'applique seulement à la branche invitée ; WRITE inclut READ et n'autorise pas l'écriture dans une version figée.
 
-Le propriétaire enregistre une invitation pour une adresse, un droit et une branche. Le lien contient un jeton aléatoire dont seule l'empreinte figure dans l'invitation persistée. Le lien n'accorde rien : le destinataire doit se connecter, vérifier la même adresse par code, puis accepter explicitement. L'acceptation crée ou modifie la permission de branche. Les états de l'invitation (PENDING, ACCEPTED, REVOKED, EXPIRED) sont distincts de ceux de l'envoi (QUEUED, SENT, FAILED). Un renvoi change le jeton et invalide l'ancien lien. Une invitation acceptée ne peut pas restaurer un droit révoqué par son rejeu.
+Le propriétaire invite une adresse sur une branche avec READ ou WRITE. Le jeton aléatoire est stocké sous forme d'empreinte ; son ouverture n'accorde aucun droit. Le destinataire vérifie cette même adresse, puis accepte. États d'invitation et d'envoi sont séparés. Un renvoi invalide l'ancien lien, qui ne peut rétablir un droit révoqué.
 
 \subsection{Diagramme de classes du partage}
 \umlfigure{partage-classes.png}{0.78}{Projet propriétaire, permission de branche et invitation distincte.}{fig:partage-classes}
-Les noms français désignent des concepts métier ; le code existant utilise notamment \texttt{BusinessService} et \texttt{InvitationService}. La relation entre utilisateur et projet porte la propriété unique. Une invitation en attente est séparée de la permission effectivement accordée.
+Le projet porte le propriétaire unique. Une invitation en attente reste distincte de la permission accordée ; le code utilise notamment \texttt{BusinessService} et \texttt{InvitationService}.
 
 \subsection{Diagramme d'activités de l'invitation}
 \umlfigure{partage-activites.png}{0.72}{De la création de l'invitation à l'acceptation ou au refus.}{fig:partage-activites}
-L'activité montre les refus dus à la mauvaise adresse, à l'expiration et à la révocation. Un échec d'envoi laisse l'état FAILED ; le propriétaire peut demander un renvoi qui renouvelle le lien. Le mode local garde les messages dans une boîte de test ; l'envoi SMTP externe n'est pas une livraison exactement une fois.
+L'activité couvre mauvaise adresse, expiration, révocation et échec d'envoi. Un renvoi renouvelle le lien. La boîte locale est un outil de test ; SMTP ne garantit pas une livraison exactement une fois.
 
 \subsection{Diagramme de séquence du partage}
 \umlfigure{partage-sequence.png}{0.78}{Invitation d'une adresse encore inconnue et création du droit après vérification.}{fig:partage-sequence}
-La création d'un compte avant l'invitation n'est pas nécessaire. Le service d'authentification prouve l'adresse ; le backend métier demeure responsable de la permission. L'acceptation sous verrou et l'unicité de la permission empêchent les doublons lors de requêtes concurrentes.
+Le destinataire peut être nouveau. L'authentification vérifie son adresse ; le backend attribue le droit. Verrou et unicité préviennent les doublons concurrents.
 
 \subsection{Invariants et limites}
-Une adresse invitée n'obtient aucune métadonnée d'une autre branche. Le propriétaire peut modifier ou révoquer les collaborateurs ; un collaborateur ne peut pas inviter. Les droits de branche survivent à V2 mais ne sont jamais copiés sur une branche restaurée. Le relais SMTP externe, les messages perdus entre enregistrement et envoi ainsi que les reprises après panne réclament encore une qualification. L'authentification déclarative historique reste uniquement un adaptateur de développement ; l'acceptation d'une invitation exige une session issue d'un code e-mail vérifié.
+Un invité ne voit que ses branches ; seul le propriétaire gère les droits. Ils survivent à V2, mais pas à une restauration. SMTP externe et reprises après panne restent à qualifier. L'adaptateur d'identité déclarative est limité au développement ; accepter exige un e-mail vérifié.

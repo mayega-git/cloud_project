@@ -27,9 +27,4 @@ User "1" -- "0..*" Op
 Credit ..> Daily : vérifie
 Credit ..> Op : évalue
 Editor ..> Credit : demande une décision
-note bottom of Credit
-Conception cible : le débit durable et
-la révision ne forment pas encore
-une transaction commune démontrée.
-end note
 @enduml

@@ -1,0 +1,121 @@
+\chapter{Description de l'API}
+\label{ann:api}
+
+Cette annexe décrit les routes présentes dans \texttt{application/backend/src/server.ts}, et non une API future pour les PDF \cite{aws-local-artifacts}. Les exemples supposent une instance de test locale et des cookies obtenus au préalable. Le serveur répond aux erreurs métier avec \texttt{\{"error":\{"code":...,"message":...\}\}}. Les messages et codes sont en anglais.
+
+\section{Session et authentification}
+
+Les routes Better Auth sont préfixées par \texttt{/api/auth/}. L'envoi du code de connexion utilise \texttt{POST /api/auth/email-otp/send-verification-otp} avec \texttt{\{"email":"...","type":"sign-in"\}}. Le client soumet ensuite l'e-mail, le code et un nom à \texttt{POST /api/auth/sign-in/email-otp}. Après vérification, \texttt{POST /auth/complete} crée la session métier. La réponse établit le cookie \texttt{business\_session}, HttpOnly, SameSite=Lax, Path=/ et valable 43\,200 secondes. Le cookie n'a pas l'attribut Secure dans le déploiement HTTP actuel.
+
+En mode local seulement, \texttt{POST /dev/sessions} crée une session depuis un nom et une adresse déclarés. Le paramètre \texttt{verified} peut simuler l'état vérifié ; il ne prouve pas la possession de l'adresse et la route n'est pas disponible hors mode local. Les OTP de développement sont accessibles par \texttt{GET /dev/mailbox?email=...} avec l'en-tête interne \texttt{x-internal-key}. Cette boîte est en mémoire et ne constitue pas un relais utilisable en production.
+
+\section{Routes métier}
+
+\begingroup\small
+\begin{longtable}{@{}L{31mm}L{23mm}L{34mm}L{47mm}@{}}
+\caption{Routes métier définies dans le backend.}\label{tab:api-routes}\\
+\toprule Méthode et route & Accès & Entrée principale & Résultat \\
+\midrule\endfirsthead
+\toprule Méthode et route & Accès & Entrée principale & Résultat \\
+\midrule\endhead
+GET \texttt{/health} & Public & Aucun. & 200 ; \texttt{status}, \texttt{quota}, \texttt{authentication}. Vérifie PostgreSQL. \\
+POST \texttt{/documents} & Session locale & \texttt{title}, \texttt{ownerTimeZone}. & 201 ; document et \texttt{editorUrl}. Exige \texttt{Idempotency-Key}. \\
+POST \texttt{/projects} & Session vérifiée & \texttt{title}, \texttt{ownerTimeZone}. & 201 ; \texttt{projectId}, \texttt{id}, \texttt{title}, \texttt{ownerId}, \texttt{ownerTimeZone}, \texttt{branchId}, \texttt{versionId}, \texttt{padId}, \texttt{state}, \texttt{editorUrl}. Exige \texttt{Idempotency-Key}. \\
+GET \texttt{/projects} & Session & Aucun. & Projets accessibles. \\
+GET \path{/projects/:projectId} & Session autorisée & Identifiant du projet. & Métadonnées autorisées. \\
+GET \path{/projects/:projectId/branches} & Session autorisée & Identifiant du projet. & Branches accessibles uniquement. \\
+GET \path{/documents/:documentId/branches} & Session autorisée & Identifiant historique du document. & Branches accessibles. \\
+GET \path{/branches/:branchId/versions} & Session autorisée & Identifiant de branche. & Versions autorisées. \\
+GET \path{/versions/:versionId/content} & READ ou propriétaire & Paramètre facultatif \texttt{revision}, entier positif ou nul. & Contenu autorisé de la version ou révision. \\
+POST \path{/branches/:branchId/invitations} & Propriétaire vérifié & \texttt{email}, \texttt{access} égal à READ ou WRITE. & 201 ; \texttt{id}, \texttt{branchId}, \texttt{email}, \texttt{access}, \texttt{state}, \texttt{emailStatus}, \texttt{expiresAt}, \texttt{emailAttempts}. Exige \texttt{Idempotency-Key}. \\
+GET \path{/branches/:branchId/invitations} & Propriétaire vérifié & Identifiant de branche. & Invitations de la branche. \\
+GET \path{/branches/:branchId/collaborators} & Propriétaire vérifié & Identifiant de branche. & Collaborateurs et droits. \\
+PUT \path{/branches/:branchId/collaborators/:userId} & Propriétaire vérifié & \texttt{access}: READ ou WRITE. & 204 ; droit modifié. \\
+DELETE \path{/branches/:branchId/collaborators/:userId} & Propriétaire vérifié & Identifiants de branche et d'utilisateur. & 204 ; accès révoqué. \\
+POST \path{/invitations/:invitationId/resend} & Propriétaire vérifié & Corps facultatif, \texttt{access} facultatif. & Invitation renvoyée ; l'ancien lien est invalidé. \\
+DELETE \path{/invitations/:invitationId} & Propriétaire vérifié & Identifiant d'invitation. & 204 ; invitation révoquée. \\
+POST \path{/invitations/preview} & Porteur du lien & \texttt{token}. & Informations limitées ; aucun droit n'est accordé. \\
+POST \path{/invitations/accept} & Session vérifiée de la même adresse & \texttt{token}. & Invitation acceptée et permission attribuée. \\
+POST \path{/branches/:branchId/closures} & Propriétaire & Aucun. & 202 ; \texttt{operationId}, \texttt{state}, \texttt{admissionDeadline}. Exige \texttt{Idempotency-Key}. \\
+GET \path{/closures/:operationId} & Session autorisée & Identifiant d'opération. & \texttt{operationId}, \texttt{state}, \texttt{finalRevision}, \texttt{successorVersionId}, \texttt{error}. \\
+POST \path{/versions/:versionId/restorations} & Propriétaire & \texttt{revision}, entier positif ou nul. & 202 ; \texttt{operationId}, \texttt{state}. Exige \texttt{Idempotency-Key}. \\
+GET \path{/restorations/:operationId} & Propriétaire & Identifiant d'opération. & \texttt{operationId}, \texttt{state}, \texttt{destinationBranchId}, \texttt{error}. \\
+\bottomrule
+\end{longtable}
+\endgroup
+
+Les clôtures et restaurations renvoient 202 parce que leur traitement peut continuer après la réponse HTTP. Le client interroge la route de suivi ; 202 ne signifie pas que la version suivante est active. Les clés d'idempotence des créations contiennent de 8 à 128 caractères.
+
+\section{Erreurs et exemples}
+
+Les erreurs de validation renvoient HTTP 400 (par exemple \texttt{INVALID\_ID}, \texttt{INVALID\_BODY}, \texttt{INVALID\_EMAIL}, \texttt{INVALID\_PROJECT}, \texttt{INVALID\_TIME\_ZONE}, \texttt{INVALID\_ACCESS}, \texttt{INVALID\_TOKEN}, \texttt{INVALID\_REVISION} et \texttt{INVALID\_IDEMPOTENCY\_KEY}). Les erreurs 401 comprennent \texttt{UNAUTHENTICATED}, \texttt{VERIFIED\_SESSION\_REQUIRED} et \texttt{EMAIL\_NOT\_VERIFIED}. Un refus de droit renvoie 403, les ressources absentes 404, les conflits d'idempotence ou d'état 409, une invitation échue 410 \texttt{INVITATION\_EXPIRED} et une dépendance indisponible 502 \texttt{DEPENDENCY\_FAILURE}. Le corps suit la forme \texttt{\{"error":\{"code":...,"message":...\}\}}.
+
+Les commandes suivantes sont des gabarits pour le jury. Elles n'ont pas été exécutées pendant la mise à jour du rapport.
+
+\begin{verbatim}
+BASE_URL=http://127.0.0.1:3000
+curl -i "$BASE_URL/health"
+
+# Local development only; stores the cookie for later requests.
+curl -i -c /tmp/project.cookies -X POST "$BASE_URL/dev/sessions" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Alice","email":"alice@example.test","verified":true}'
+
+# Create the project, initial branch, version, and pad.
+curl -i -b /tmp/project.cookies -X POST "$BASE_URL/projects" \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: jury-project-0001' \
+  -d '{"title":"Journal étudiant","ownerTimeZone":"Africa/Abidjan"}'
+# Replace this value with branchId from the response.
+BRANCH_ID=replace-with-branch-id
+
+# Create a branch invitation.
+curl -i -b /tmp/project.cookies -X POST \
+  "$BASE_URL/branches/$BRANCH_ID/invitations" \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: jury-invite-0001' \
+  -d '{"email":"bob@example.test","access":"WRITE"}'
+
+# Request and follow an asynchronous closure.
+curl -i -b /tmp/project.cookies -X POST \
+  "$BASE_URL/branches/$BRANCH_ID/closures" \
+  -H 'Idempotency-Key: jury-close-0001'
+# Replace this value with operationId from the 202 response.
+OPERATION_ID=replace-with-operation-id
+curl -i -b /tmp/project.cookies "$BASE_URL/closures/$OPERATION_ID"
+\end{verbatim}
+
+Les routes \texttt{/dev/sessions}, \texttt{/dev/mailbox} et les routes locales de permission ne sont pas une authentification de production. Aucune route de lien PDF ou de téléchargement n'est encore présente. \texttt{/health} renvoie \texttt{quota: NOT\_IMPLEMENTED}.
+
+\chapter{Rapport de tests}
+\label{ann:rapport-tests}
+
+\section{Méthode et portée}
+
+Les résultats ci-dessous viennent des essais consignés par le porteur le 26 octobre 2026 sur la pile déployée en \texttt{eu-north-1} \cite{aws-test-records}. Ils n'ont pas été relancés pour cette édition du rapport. Cette annexe ne décrit donc pas une nouvelle campagne AWS et ne couvre aucune charge soutenue.
+
+\section{Résultats bruts rapportés}
+
+\begin{longtable}{@{}L{39mm}L{61mm}L{48mm}@{}}
+\caption{Résultats rapportés des essais AWS du 26 octobre 2026.}\label{tab:tests-aws}\\
+\toprule Essai & Résultat observé & Portée \\
+\midrule\endfirsthead
+\toprule Essai & Résultat observé & Portée \\
+\midrule\endhead
+Santé par ALB & 20 appels à \texttt{/health}, 20 réponses HTTP 200. & Série de vérification seulement. \\
+Session et API & Une session créée en 201 ; 30 appels \texttt{GET /projects}, tous en 200. & L'instance répondante n'était pas identifiée, la distribution A/B n'est pas prouvée. \\
+Création & \texttt{POST /documents} avec clé : 201 et URL d'éditeur au port 9001. & Essai de création, sans panne injectée. \\
+Passerelle & \texttt{/health}: 200 ; API administrative et \texttt{/admin}: 403. & Chemins testés seulement. \\
+Ports internes & Sondages des ports 3000, 9002 et 5432 de l'ALB, et 3000, 9001 et 9002 de A : expiration, code curl 28. & Hôtes et ports sondés à cet instant. \\
+Bucket & Accès anonyme à S3 : 403 \texttt{AccessDenied}. & Objet demandé sans identifiants. \\
+Édition concurrente & Deux navigateurs via le port 9001 ont affiché le même texte entrelacé après des frappes au même endroit : \texttt{BAOB-BBB LICE-AAA}. & Un essai ; aucune preuve générale de C2. \\
+Autorisation pad & Propriétaire : 200 ; utilisateur sans droit et sans session : 401 rapporté. & Identités et ressource de l'essai. \\
+Charge, panne et coût & Non exécutés. & Aucun résultat à analyser. \\
+\bottomrule
+\end{longtable}
+
+\section{Analyse des contraintes}
+
+C1 n'a pas été testée : le code ne contient ni lien à nombre d'utilisations limité ni diffusion de PDF. L'essai collaboratif donne un résultat ponctuel, mais ne couvre pas les écritures en vol lors d'une panne ou d'un gel. C2 reste à qualifier. C3 et C4 ne sont pas implémentées. C5 n'a fait l'objet d'aucun essai de charge ; la capacité à traiter 15\,000 visiteurs et 300 rédacteurs n'est pas démontrée. C6 ne peut pas être testée, car l'épuisement et l'attente ne sont pas codés.
+
+La preuve du coût AWS reste à compléter avec une capture ou un export Cost Explorer. Il faudra indiquer la période, la région et les ressources incluses. Aucun montant n'est avancé dans le rapport.

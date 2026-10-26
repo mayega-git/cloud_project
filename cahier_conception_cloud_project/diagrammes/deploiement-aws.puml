@@ -1,0 +1,37 @@
+@startuml
+!include style.puml
+title Déploiement AWS observé au 26 octobre 2026
+top to bottom direction
+skinparam defaultFontSize 17
+cloud "GitHub Actions\npublication manuelle" as Actions
+cloud "GHCR\nimages identifiées par SHA et digest" as Ghcr
+node "AWS, eu-north-1\nVPC par défaut" as Vpc {
+  node "Application Load Balancer\nHTTP : 80, 9001" as Alb
+  together {
+    node "Zone A" as ZoneA {
+      node "EC2 A\nBackend et Nginx\nEtherpad unique" as Ec2A
+    }
+    node "Zone B" as ZoneB {
+      node "EC2 B\nBackend et Nginx\nrelais vers Etherpad A" as Ec2B
+    }
+  }
+  database "RDS PostgreSQL 15\nprivé, une zone" as Rds
+  cloud "S3 privé\nnon utilisé par le code" as S3
+  artifact "Secrets Manager\n5 secrets" as Secrets
+}
+Actions --> Ghcr : publication
+Ghcr --> Ec2A : images
+Ghcr --> Ec2B : images
+Alb --> Ec2A : ports 80 et 9001
+Alb --> Ec2B : ports 80 et 9001
+Ec2A --> Rds : backend et Etherpad
+Ec2B --> Rds : backend
+Ec2A --> Secrets : rôle IAM
+Ec2B --> Secrets : rôle IAM
+  note bottom of Vpc
+  Nginx sur B relaie les connexions d'édition vers A.
+  Le moteur Etherpad n'est présent que sur A.
+  Le modèle déclare aussi un frontend sur le port 3001,
+  mais sa mise en service n'est pas vérifiée.
+end note
+@enduml

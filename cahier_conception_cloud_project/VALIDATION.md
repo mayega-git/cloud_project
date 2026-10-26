@@ -46,3 +46,27 @@ Cette entrée consigne uniquement les contrôles de la présente révision. Les 
 - `git diff --check` s'est terminé sans erreur. Les diagrammes d'analyse contrôlés ne contiennent aucun nom de technologie ; le seul PDF du cahier est `main.pdf`.
 
 Aucun mécanisme métier supplémentaire n'a été codé ou exécuté, aucune ressource AWS n'a été déployée et aucun test de charge n'a été effectué pour cette révision.
+
+## Révision architecture AWS et annexes — 26 octobre 2026
+
+- `make diagrams PLANTUML_JAR=/home/mayega/Downloads/NetworkGandal/plantuml.jar` a généré les vues logique et de déploiement avec PlantUML 1.2026.8 et Java 21.
+- `make pdf` a régénéré `main.pdf` avec latexmk et pdfLaTeX. Le document comporte 64 pages A4. Le journal `main.log` ne contient pas de référence ou citation indéfinie, de label dupliqué ni de débordement de boîte.
+- Inspection visuelle effectuée pour les pages des diagrammes d’architecture, du tableau des décisions, des contraintes et de la traçabilité, ainsi que pour les annexes API et rapport de tests. Les diagrammes restent en noir et blanc. La figure 3.1 ne porte plus la note « conception cible » ; la limite du modèle de crédit reste expliquée dans le texte.
+- L’annexe API a été comparée aux routes présentes dans `application/backend/src/server.ts`. Les exemples `curl` sont descriptifs et n’ont pas été exécutés dans cette révision.
+- Aucun test applicatif, essai AWS, test de charge ou relevé de coût n’a été exécuté pour cette révision documentaire. Les résultats AWS rapportés proviennent du journal local de passation et sont attribués à leurs observations antérieures. La contrainte C1 reste non testée et la preuve de coût reste à joindre.
+
+## Cadrage de capacité Etherpad — 26 octobre 2026
+
+- Les sources officielles Etherpad consultées sont le calculateur de capacité, son outil de test et l'issue #7756. Cette issue, ouverte le 15 mai 2026, ne contient pas le test PostgreSQL/PgBouncer chiffré évoqué dans la demande. Faute de référence au compte rendu, les chiffres matériels et le dimensionnement proposé ne sont pas inscrits comme résultats établis.
+- La documentation Node.js v20 sur `UV_THREADPOOL_SIZE` a été consultée. Le rapport indique les familles d'API concernées et ne recommande pas une valeur de 128 pour les connexions WebSocket sans mesure.
+- `make pdf` a réussi et régénéré `main.pdf` (66 pages A4). Après la seconde passe latexmk, `main.log` ne signale ni citation/référence indéfinie, ni label dupliqué, ni débordement de boîte. Un contrôle des sources n'a relevé aucune citation orpheline ni label dupliqué.
+- Les pages physiques 29 et 30, qui contiennent le nouveau passage, ont été inspectées visuellement. Le texte et les références sont lisibles, sans débordement.
+- Aucun essai de charge ni test applicatif ou AWS n'a été exécuté. La capacité à 300 rédacteurs demeure à mesurer ; C2 requiert des vérifications distinctes de conservation des écritures acceptées et de convergence.
+
+
+## Réduction du rapport à 40 pages — 26 octobre 2026
+
+- `make pdf` a régénéré `main.pdf` : 40 pages A4, couverture, sommaire et références compris. Le journal final ne contient ni référence ou citation indéfinie, ni label dupliqué, ni débordement de boîte.
+- Les pages physiques 14–15 (scénarios), 17–18 (architecture et déploiement), 21–22 (capacité et conception), 35 (tableau des bonnes pratiques AWS), 36 (résultats AWS) et 37–38 (bibliographie) ont été inspectées visuellement. Les diagrammes restent lisibles et les tableaux tiennent dans la page.
+- Les annexes ne sont plus incluses dans `main.pdf`. Leur fichier source `chapitres/06-annexes.tex` a été conservé. Les sections d’implémentation ont été ramenées à la table des choix technologiques, au tableau des bonnes pratiques AWS (anciennement 4.7) et aux résultats AWS, renumérotés automatiquement.
+- Les diagrammes PlantUML n’ayant pas changé, `make diagrams` n’a pas été exécuté. Aucun test applicatif, test AWS ni test de charge n’a été lancé.
