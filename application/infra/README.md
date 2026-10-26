@@ -11,6 +11,7 @@
 | Instance A (zone 1) | Backend, passerelle Nginx et **l'unique Etherpad**. Applique les migrations une seule fois |
 | Instance B (zone 2) | Backend et passerelle Nginx. Relaie l'édition vers l'Etherpad de A (adresse privée de A transmise par la pile), démarre quand le backend de A répond |
 | RDS PostgreSQL (une zone, non public) | Données métier, sessions et données Etherpad, partagées par A et B. Les sous-réseaux du VPC par défaut sont publics : seule la règle du groupe de sécurité (5432 depuis les instances) et `PubliclyAccessible: false` le protègent |
+| ALB, port 3001 | Interface web Next.js (`FrontendUrl`), vers le conteneur `frontend` de A et de B (contrôle `/`). Chaque conteneur parle au backend de sa propre instance par le réseau Docker et relaie les requêtes sous `/backend/...` |
 | Bucket S3 privé | Réservé aux futurs PDF (aucun code ne l'utilise encore) |
 | Secrets Manager | Clés et mots de passe générés par AWS, lus au démarrage par le rôle de l'instance |
 
@@ -40,6 +41,16 @@ Les deux instances sont dans des sous-réseaux publics avec une adresse IPv4 pub
    $DC --profile a up -d backend gateway
    ```
    Sur l'instance B, les conteneurs redémarrent seuls (`restart: unless-stopped`) une fois la base joignable ; sinon, `$DC up -d backend gateway`.
+
+## Ajouter ou mettre à jour le frontend sur des instances existantes
+
+Le script de démarrage ne s'exécute qu'une fois. Une mise à jour de la pile qui modifie `UserData` arrête puis redémarre les instances (interruption de quelques minutes, les conteneurs reviennent seuls) sans relancer ce script. Pour démarrer ou mettre à jour le frontend sur A puis B, en session Systems Manager, en une seule ligne (remplacer les trois références) :
+
+```sh
+sudo sh -c 'docker pull <FRONTEND_IMAGE> && docker rm -f frontend 2>/dev/null; docker run -d --name frontend --restart unless-stopped --network app_default --memory 256m -p 3001:3001 -e BACKEND_URL=http://backend:3000 -e BACKEND_PUBLIC_ORIGIN=http://<ALB_DNS> <FRONTEND_IMAGE>'
+```
+
+`BACKEND_PUBLIC_ORIGIN` doit être l'origine publique de l'ALB (celle de `AUTH_BASE_URL`), car Better Auth refuse les requêtes d'une autre origine. La connexion rapide du frontend (`POST /dev/sessions` avec `"verified": true`) n'existe qu'en mode local : elle ne prouve pas la possession de l'adresse.
 
 ## Contrôles à exécuter, et ce qu'ils prouvent
 

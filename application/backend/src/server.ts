@@ -94,7 +94,11 @@ app.post('/dev/sessions', async (request, reply) => {
       typeof body.email !== 'string' || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(body.email)) {
     throw new DomainError(400, 'INVALID_IDENTITY', 'A name and email are required');
   }
-  const session = await createLocalSession(body.name, body.email);
+  // Local mode only: "verified" skips the e-mail code. The declared address is not proven, which is
+  // already the case for any local session, so this route must never be exposed publicly.
+  const session = body.verified === true
+    ? await createVerifiedSession(body.name, body.email)
+    : await createLocalSession(body.name, body.email);
   return reply.header('set-cookie', sessionCookie(session.token)).code(201).send({userId: session.userId});
 });
 

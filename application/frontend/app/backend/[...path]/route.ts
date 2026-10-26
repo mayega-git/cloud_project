@@ -9,7 +9,7 @@ const backendOrigin = process.env.BACKEND_PUBLIC_ORIGIN ?? backendUrl;
 
 // Only the routes the interface needs. /internal/* and /dev/mailbox stay out.
 const allowed = [
-  'api/auth', 'auth/complete', 'projects', 'branches', 'invitations',
+  'api/auth', 'auth/complete', 'dev/sessions', 'projects', 'branches', 'invitations',
   'versions', 'closures', 'restorations',
 ];
 
