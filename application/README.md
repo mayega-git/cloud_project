@@ -1,6 +1,6 @@
 # Application locale : branches et versions métier
 
-Ce MVP utilise Etherpad 3.3.6, PostgreSQL 15, un backend TypeScript/Fastify et un plugin Etherpad local. Il crée des branches et des versions métier, ferme une version manuellement ou à la fin de la journée du propriétaire, et restaure une révision vers une branche indépendante. La vérification de l'adresse par code à usage unique (OTP e-mail, Better Auth) et le partage par invitation de branche sont intégrés en local. Le quota, les PDF, les liens de téléchargement limités, les notifications et AWS restent à développer.
+Ce MVP utilise Etherpad 3.3.6, PostgreSQL 15, un backend TypeScript/Fastify et un plugin Etherpad local. Il crée des branches et des versions métier, ferme une version manuellement ou à la fin de la journée du propriétaire, et restaure une révision vers une branche indépendante. La vérification de l'adresse par code à usage unique (OTP e-mail, Better Auth) et le partage par invitation de branche sont intégrés en local. Un crédit d'écriture quotidien et des liens de téléchargement limités (PDF) sont aussi implémentés ; les notifications par e-mail, le blocage des abus et la supervision restent à développer.
 
 ## Démarrer
 
@@ -99,7 +99,17 @@ Les deux demandes longues retournent `202` et un `operationId` : la clôture ou 
 
 Une opération reçue est arrivée au serveur ; admise signifie que le contrôle dans la file l'autorise avant l'échéance ; enregistrée signifie qu'Etherpad a ajouté sa révision ; acquittée signifie que le client a reçu `ACCEPT_COMMIT`. Les trois secondes bornent l'admission, non la fin de tous les traitements.
 
-Le quota de 10 000 caractères est **non implémenté**. La copie structurelle n'est actuellement pas facturée ; sa politique définitive reste à valider. Les pannes à chaque étape critique, la concurrence entre plusieurs instances backend, la reconnexion après une longue coupure, 300 rédacteurs et 15 000 visiteurs ne sont pas qualifiés. Un pad créé mais non référencé après un échec peut demander un inventaire manuel ; aucun nettoyage destructif automatique n'est lancé.
+## Crédit d'écriture et liens de téléchargement
+
+**Crédit.** Chaque rédacteur dispose de 10 000 caractères par jour, commun à tous ses appareils, documents et branches. Règle retenue : une modification coûte le nombre de caractères qu'elle insère ; les suppressions et la mise en forme ne coûtent rien ; une modification qui dépasserait le crédit est refusée en entier ; le jour de quota est le jour UTC. Le plugin calcule le coût dans la file ordonnée du pad et le backend débite par une seule instruction SQL conditionnelle (`credit.ts`), donc deux appareils simultanés ne peuvent pas dépasser le plafond. Le débit précède l'écriture : si Etherpad échoue après un débit, le crédit est perdu, jamais dépassé. Le refus utilise le panneau « Édition arrêtée » existant. La copie structurelle d'une version n'est pas débitée ; la politique définitive reste à valider.
+
+**Liens.** `POST /branches/{id}/download-links` (propriétaire, corps `{"maxDownloads": n}`) crée un lien et renvoie son adresse publique une seule fois ; seule l'empreinte du jeton est conservée. `GET /branches/{id}/download-links` liste les liens et les téléchargements restants. `GET /d/{token}` (sans identité) renvoie le PDF du document tel qu'il est à cet instant, ou `410 LINK_EXHAUSTED` ; `GET /d/{token}/status` indique `AVAILABLE` ou `EXHAUSTED`. Un téléchargement est réservé par un `UPDATE ... WHERE remaining > 0` avant toute conversion, et rendu si la production du PDF échoue. Le PDF est du texte brut (Helvetica, A4) : la mise en forme riche n'est pas reproduite. Le téléchargement est compté à la réservation, pas à la réception complète par le navigateur.
+
+Limites : les 15 000 visiteurs et les 300 rédacteurs ne sont pas qualifiés ; aucun e-mail n'est envoyé au dernier téléchargement.
+
+## Autres limites
+
+Les pannes à chaque étape critique, la concurrence entre plusieurs instances backend, la reconnexion après une longue coupure, 300 rédacteurs et 15 000 visiteurs ne sont pas qualifiés. Un pad créé mais non référencé après un échec peut demander un inventaire manuel ; aucun nettoyage destructif automatique n'est lancé.
 
 ## Vérifier
 
@@ -115,4 +125,4 @@ docker compose --env-file .env -f deployment/compose.yaml run --rm --no-deps \
 docker compose --env-file .env -f deployment/compose.yaml logs --tail=100 etherpad backend
 ```
 
-Les tests d'intégration exigent les conteneurs démarrés et les migrations exécutées. Aucun service AWS n'est déployé.
+Les tests d'intégration exigent les conteneurs démarrés et les migrations exécutées. Une pile AWS est déployée en `eu-north-1` ; son état et les limites des vérifications figurent dans `infra/README.md`. Le présent guide décrit surtout le démarrage local.

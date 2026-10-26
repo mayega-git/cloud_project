@@ -4,7 +4,7 @@ import Link from 'next/link';
 import {useParams} from 'next/navigation';
 import {useCallback, useEffect, useState} from 'react';
 import {
-  api, messageOf, type Access, type Collaborator, type Invitation, type Project, type Version,
+  api, messageOf, type Access, type Collaborator, type DownloadLink, type Invitation, type Project, type Version,
 } from '@/lib/api';
 
 // The editor gateway listens on port 9001 of the same host unless overridden.
@@ -18,6 +18,9 @@ export default function BranchPage() {
   const [versions, setVersions] = useState<Version[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
+  const [links, setLinks] = useState<DownloadLink[]>([]);
+  const [maxDownloads, setMaxDownloads] = useState('500');
+  const [newLinkUrl, setNewLinkUrl] = useState<string | null>(null);
   const [origin, setOrigin] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteAccess, setInviteAccess] = useState<Access>('WRITE');
@@ -30,6 +33,7 @@ export default function BranchPage() {
     ]);
     setInvitations(pending);
     setCollaborators(people);
+    setLinks(await api<DownloadLink[]>(`/branches/${branchId}/download-links`));
   }, [branchId]);
 
   useEffect(() => {
@@ -68,6 +72,14 @@ export default function BranchPage() {
     });
   });
 
+  const createLink = () => act(async () => {
+    const created = await api<{url: string}>(`/branches/${branchId}/download-links`, {
+      method: 'POST', json: {maxDownloads: Number(maxDownloads)},
+    });
+    setNewLinkUrl(created.url);
+    await loadSharing();
+  });
+
   const isOwner = project?.isOwner === true;
 
   return (
@@ -101,6 +113,36 @@ export default function BranchPage() {
           récupérable dans le panneau de l'éditeur.
         </p>
       </section>
+
+      {isOwner && (
+        <section className="card stack" aria-labelledby="links-title">
+          <h2 id="links-title">Liens de téléchargement</h2>
+          <p className="muted">
+            Un lien donne le document au format PDF, tel qu'il est au moment du téléchargement, un nombre
+            de fois limité. Le lien ne change pas quand le document est corrigé.
+          </p>
+          <div className="row">
+            <input aria-label="Nombre de téléchargements autorisés" type="number" min={1} max={1000000}
+              value={maxDownloads} onChange={(e) => setMaxDownloads(e.target.value)} />
+            <button type="button" disabled={!maxDownloads} onClick={createLink}>Créer un lien</button>
+          </div>
+          {newLinkUrl && (
+            <p className="notice ok">
+              Lien créé, à copier maintenant (il ne sera plus affiché) : <a href={newLinkUrl}>{newLinkUrl}</a>
+            </p>
+          )}
+          {links.length === 0 ? <p className="muted">Aucun lien.</p> : (
+            <ul className="plain">
+              {links.map((item) => (
+                <li key={item.id}>
+                  <span className="badge">{item.remaining === 0 ? 'épuisé' : 'actif'}</span>{' '}
+                  {item.remaining} restant(s) sur {item.maxDownloads}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       {isOwner && (
         <section className="card stack" aria-labelledby="share-title">

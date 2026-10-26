@@ -1,6 +1,6 @@
 # Infrastructure AWS : déployer, tester, supprimer
 
-`aws.yaml` est un modèle CloudFormation unique. Il décrit deux instances applicatives dans deux zones de disponibilité derrière un Application Load Balancer, une base PostgreSQL RDS non publique et un bucket S3 privé. Il utilise le **VPC par défaut** de la région (aucun réseau n'est créé par la pile). Il n'a **jamais été exécuté sur AWS** : il a seulement été vérifié localement (voir « Vérifié localement » plus bas). Le premier déploiement peut donc demander des corrections ; copier le message d'erreur de l'onglet « Événements » de la pile suffit pour les faire.
+`aws.yaml` est un modèle CloudFormation utilisé pour créer la pile `cloud-project-infra` en `eu-north-1`, dans le VPC par défaut. Le premier démarrage a échoué lors de la migration PostgreSQL, car RDS imposait TLS alors que le backend et Etherpad se connectaient sans chiffrement. Le groupe de paramètres a ensuite fixé `rds.force_ssl=0`. Les résultats consignés après le déploiement sont résumés ci-dessous ; ils ne couvrent ni la charge, ni les arrêts de composants, ni le coût. Ce guide conserve les procédures de création, de vérification et de suppression pour une éventuelle recréation.
 
 ## Architecture
 
@@ -11,11 +11,13 @@
 | Instance A (zone 1) | Backend, passerelle Nginx et **l'unique Etherpad**. Applique les migrations une seule fois |
 | Instance B (zone 2) | Backend et passerelle Nginx. Relaie l'édition vers l'Etherpad de A (adresse privée de A transmise par la pile), démarre quand le backend de A répond |
 | RDS PostgreSQL (une zone, non public) | Données métier, sessions et données Etherpad, partagées par A et B. Les sous-réseaux du VPC par défaut sont publics : seule la règle du groupe de sécurité (5432 depuis les instances) et `PubliclyAccessible: false` le protègent |
-| ALB, port 3001 | Interface web Next.js (`FrontendUrl`), vers le conteneur `frontend` de A et de B (contrôle `/`). Chaque conteneur parle au backend de sa propre instance par le réseau Docker et relaie les requêtes sous `/backend/...` |
+| ALB, port 3001 | Interface web Next.js (`FrontendUrl`), déployée et vérifiée le 26 octobre 2026 (page, connexion rapide, création de projet, éditeur ouvert depuis la page : `curl` et Playwright). Version écrite et validée localement, pas encore déployée : routage **par chemin** (`/backend/*` et `/d/*` vers le groupe des backends, le reste vers les frontends), pour qu'aucun frontend ne dépende d'un backend précis. |
 | Bucket S3 privé | Réservé aux futurs PDF (aucun code ne l'utilise encore) |
 | Secrets Manager | Clés et mots de passe générés par AWS, lus au démarrage par le rôle de l'instance |
 
-Les deux instances sont dans des sous-réseaux publics avec une adresse IPv4 publique (pour télécharger les paquets et les images), mais n'acceptent aucune connexion directe : leurs ports 3000 et 9001 ne sont ouverts qu'au groupe de sécurité de l'ALB. Pas de NAT Gateway. L'administration passe par AWS Systems Manager (session sans port SSH). En secours, deux paramètres facultatifs ouvrent le port 22 à **votre adresse seulement** (`SshCidr`) et associent une paire de clés (`KeyPairName`) ; vides, aucune règle SSH n'existe. Les métadonnées de l'instance exigent IMDSv2 avec un saut maximal de 1, donc les conteneurs n'obtiennent pas les identifiants du rôle.
+La pile déployée possède trois listeners HTTP : 80, 9001 et 3001. Dans la version déployée, chaque conteneur `frontend` relaie les appels vers le backend de sa propre instance : arrêter ce backend a fait échouer environ la moitié des appels de l'interface (mesuré : 19 erreurs sur 40, puis 18 sur 40), alors que le port 80 est resté à 40 sur 40. La version du modèle présente dans le dépôt corrige ce couplage par le routage par chemin de l'ALB ; elle reste à déployer et à mesurer de la même façon.
+
+Les deux instances sont dans des sous-réseaux publics avec une adresse IPv4 publique (pour télécharger les paquets et les images), mais leurs ports applicatifs sont configurés pour recevoir le trafic du groupe de sécurité de l'ALB. Le modèle courant décrit les ports 3000, 3001 et 9001 ; le port 3001 n'a pas été vérifié dans la pile active. Pas de NAT Gateway. L'administration passe par AWS Systems Manager (session sans port SSH). En secours, deux paramètres facultatifs ouvrent le port 22 à **votre adresse seulement** (`SshCidr`) et associent une paire de clés (`KeyPairName`) ; vides, aucune règle SSH n'existe. Les métadonnées de l'instance exigent IMDSv2 avec un saut maximal de 1 ; la configuration vise à empêcher le passage des identifiants du rôle aux conteneurs.
 
 ## Prérequis
 
@@ -50,7 +52,7 @@ Le script de démarrage ne s'exécute qu'une fois. Une mise à jour de la pile q
 sudo sh -c 'docker pull <FRONTEND_IMAGE> && docker rm -f frontend 2>/dev/null; docker run -d --name frontend --restart unless-stopped --network app_default --memory 256m -p 3001:3001 -e BACKEND_URL=http://backend:3000 -e BACKEND_PUBLIC_ORIGIN=http://<ALB_DNS> <FRONTEND_IMAGE>'
 ```
 
-`BACKEND_PUBLIC_ORIGIN` doit être l'origine publique de l'ALB (celle de `AUTH_BASE_URL`), car Better Auth refuse les requêtes d'une autre origine. La connexion rapide du frontend (`POST /dev/sessions` avec `"verified": true`) n'existe qu'en mode local : elle ne prouve pas la possession de l'adresse.
+Sur AWS, le frontend ne relaie plus les appels API : l'ALB envoie `/backend/*` directement aux backends. `AUTH_BASE_URL` doit donc valoir l'origine que le navigateur utilise, `http://<ALB_DNS>:3001` (Better Auth refuse les requêtes d'une autre origine, vérifié : origine identique 200, origine étrangère 403). Sur une instance existante, le fichier `/opt/app/compose.yaml` se corrige par : `sudo sed -i 's|AUTH_BASE_URL: http://$ALB_DNS$|AUTH_BASE_URL: http://$ALB_DNS:3001|' /opt/app/compose.yaml`, puis recréer le conteneur backend. La connexion rapide du frontend (`POST /dev/sessions` avec `"verified": true`) n'existe qu'en mode local : elle ne prouve pas la possession de l'adresse.
 
 ## Contrôles à exécuter, et ce qu'ils prouvent
 
@@ -66,7 +68,7 @@ sudo sh -c 'docker pull <FRONTEND_IMAGE> && docker rm -f frontend 2>/dev/null; d
 | Bucket privé | URL directe d'un objet : `AccessDenied` | Aucun accès public |
 | Arrêt d'un backend | Arrêter le conteneur backend de B, vérifier que `PublicUrl/health` répond toujours | Le backend est redondé |
 
-Aucun de ces contrôles n'a encore été exécuté sur AWS.
+Le journal du 26 octobre rapporte des cibles saines, `/health` à 200, vingt requêtes de santé à 200, trente appels authentifiés à 200, un essai d'édition simultanée, l'accès anonyme au bucket refusé en 403 et des timeouts sur plusieurs ports internes. Ces résultats ne prouvent pas la répartition du trafic entre A et B, une session effectivement observée sur chaque backend, la panne d'une instance, la charge ou le coût. Le listener du frontend n'a pas fait l'objet d'une vérification consignée.
 
 ## Limites réelles
 
@@ -97,4 +99,4 @@ Postes facturables créés : deux instances EC2 et leurs volumes, un ALB, une in
 - Le fichier Compose généré est valide pour le rôle A, et ne contient que le backend et la passerelle pour le rôle B.
 - Le gabarit Nginx de la passerelle donne 200 sur `/health` (relayé vers Etherpad), 403 sur `/api/` et sur `/admin`.
 
-Non vérifié : tout ce qui dépend d'AWS (syntaxe acceptée par CloudFormation, versions du moteur PostgreSQL, paquets Ubuntu `docker-compose-v2` et `python3-boto3`, SSL de RDS, éligibilité des types d'instance, démarrage réel des conteneurs).
+Les premiers points ci-dessus étaient non vérifiés avant le déploiement. L'exécution a ensuite confirmé la création de la pile, le démarrage de PostgreSQL et des conteneurs, et le contrôle de santé. Il reste à vérifier la suppression puis la recréation, le test d'arrêt d'une instance, la restauration de sauvegarde, la configuration du frontend sur les deux instances, la charge et le coût réel.

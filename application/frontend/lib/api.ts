@@ -7,6 +7,7 @@ export interface Version {
 }
 export interface Invitation {id: string; email: string; access: Access; state: string; emailStatus: string}
 export interface Collaborator {userId: string; name: string; email: string; access: Access}
+export interface DownloadLink {id: string; maxDownloads: number; remaining: number; createdAt: string}
 export interface InvitationPreview {projectTitle: string; email: string; access: Access; state: string}
 
 export class ApiError extends Error {
