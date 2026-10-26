@@ -56,6 +56,9 @@
   </section>
   <script>
     const $ = (id) => document.getElementById(id);
+    // crypto.randomUUID() needs a secure context (HTTPS or localhost); getRandomValues does not.
+    const newKey = () => Array.from(crypto.getRandomValues(new Uint8Array(16)),
+      (byte) => byte.toString(16).padStart(2, '0')).join('');
     let selectedBranch = null;
     let selectedOwner = false;
     const inviteToken = new URLSearchParams(location.hash.slice(1)).get('invite');
@@ -92,7 +95,7 @@
     $('createProject').onclick = () => run(async () => {
       const result = await call('/projects',
         json({title: $('projectTitle').value, ownerTimeZone: $('timeZone').value},
-          'POST', {'Idempotency-Key': crypto.randomUUID()}));
+          'POST', {'Idempotency-Key': newKey()}));
       show(`Projet créé : ${result.title}`);
       await loadProjects();
     });
@@ -185,7 +188,7 @@
     $('invite').onclick = () => run(async () => {
       const result = await call(`/branches/${selectedBranch}/invitations`,
         json({email: $('inviteEmail').value, access: $('inviteAccess').value},
-          'POST', {'Idempotency-Key': crypto.randomUUID()}));
+          'POST', {'Idempotency-Key': newKey()}));
       show(result.emailStatus === 'SENT' ? 'Invitation envoyée.' : 'Invitation enregistrée ; envoi échoué.');
       await loadSharing();
     });

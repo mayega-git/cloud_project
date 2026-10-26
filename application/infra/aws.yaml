@@ -260,10 +260,22 @@ Resources:
     Properties:
       DBSubnetGroupDescription: Subnets of the editor database (two Availability Zones)
       SubnetIds: [!Ref SubnetAId, !Ref SubnetBId]
+  # RDS PostgreSQL refuses connections without TLS by default, and neither the
+  # backend nor Etherpad is configured for TLS. The traffic stays inside the VPC
+  # and is limited to the application security group. The family must match the
+  # major version in DbEngineVersion.
+  DbParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: Accept connections without TLS from the application instances
+      Family: postgres15
+      Parameters:
+        rds.force_ssl: "0"
   Database:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Delete
     Properties:
+      DBParameterGroupName: !Ref DbParameterGroup
       Engine: postgres
       EngineVersion: !Ref DbEngineVersion
       DBInstanceClass: !Ref DbInstanceClass

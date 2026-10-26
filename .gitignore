@@ -5,4 +5,8 @@ application/.env
 application/.secrets/
 application/backend/node_modules/
 application/backend/dist/
+application/frontend/node_modules/
+application/frontend/.next/
+application/frontend/next-env.d.ts
+application/frontend/*.tsbuildinfo
 introduction-aws.pdf
